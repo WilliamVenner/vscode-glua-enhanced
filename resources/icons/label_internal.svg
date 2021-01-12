@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" height="16" width="38.63">
+	<rect y="calc(50% - (11px / 2))" x="calc(50% - (38.63px / 2))" height="11" width="38.63" fill="#c7c7c7"/>
+	<text x="50%" y="50%" fill="#000" dominant-baseline="central" text-anchor="middle" style="font-family: 'Arial', sans-serif; font-size: 7px;">INTERNAL</text>
+</svg>

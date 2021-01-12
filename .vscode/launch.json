@@ -1,0 +1,13 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"args": [ "--extensionDevelopmentPath=${workspaceFolder}" ],
+			"name": "Extension",
+			"outFiles": [ "${workspaceFolder}/dist/**/*.js" ],
+			"preLaunchTask": "npm: webpack",
+			"request": "launch",
+			"type": "extensionHost"
+		}
+	]
+}

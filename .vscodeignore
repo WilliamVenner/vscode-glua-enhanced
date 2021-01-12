@@ -1,0 +1,9 @@
+*
+*/**
+!dist/
+!resources/
+!syntaxes/
+!src/
+!README.md
+!package.json
+!LICENSE
