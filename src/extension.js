@@ -7,22 +7,30 @@ const GITHUB_URL = "https://github.com/Facepunch/garrysmod/blob/master/garrysmod
 
 const REGEXP_COLOR = /\bColor\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?\s*\)/g;
 const REGEXP_COLOR_REPLACER = /\b(Color\s*\(\s*)(\d+)(\s*,\s*)(\d+)(\s*,\s*)(\d+)(?:(\s*,\s*)(\d+))?(\s*\))/;
-const REGEXP_ENUM_COMPLETIONS = /(function \s*)?(?<!\.|:)\b([A-Z][A-Z_\.]*)$/;
-const REGEXP_FUNC_COMPLETIONS = /(\S+?)(\.|:)$/;
-const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1(?!\s*noitcnuf)/;
+const REGEXP_ENUM_COMPLETIONS = /((?:function|local)\s+)?(?<!\.|:)\b([A-Z][A-Z_\.]*)$/;
+const REGEXP_FUNC_COMPLETIONS = /\b(?:(function)\s+)?((?:[A-Za-z_][A-Za-z0-9_]*)+?)(\.|:)(?:[A-Za-z_][A-Za-z0-9_]*)?$/;
+const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1(?!\s*lacol)(\s*function)?/;
+
+const REGEXP_FUNC_DECL_COMPLETIONS = /(local\s+)?(?:function\s+([A-Za-z_][A-Za-z0-9_]*)?|(funct?i?o?n?))(?!:|\.)$/;
 
 // String completions
 const REGEXP_GAMEMODE_HOOK_COMPLETIONS = /hook\.(?:Add|Remove|GetTable|Run|Call)\s*\((?:["']|\[=*\[)/;
 const REGEXP_VGUI_CREATE = /vgui\.Create\((?:["']|\[=*\[)$/;
 
 // File completions
+// TODO possibly use the wiki scrape data to extract parameters from functions to autocomplete sounds/models/materials
 const REGEXP_LUA_COMPLETIONS = /(?:(?:include|AddCSLuaFile|CompileFile)\s*\(\s*(?:["']|\[=*\[)(?:lua\/)?|lua\/)([^\s]+\/)?/;
 const REGEXP_MATERIAL_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:SetImage|SetMaterial))|Material|surface\.GetTextureID)\s*\(\s*(?:["']|\[=*\[)(?:materials\/)?|materials\/)([^\s]+\/)?/;
-const REGEXP_SOUND_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound|))|Sound|SoundDuration|sound\.Play|(sound\.PlayFile)|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/)(?:([^\s\/]+?)\s+)?([^\s]+\/)?/;
-const REGEXP_ICON_COMPLETIONS = /(icon|flags)16\/$/;
+// FILTER const REGEXP_SOUND_COMPLETIONS = /(?:((?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound|))|Sound|SoundDuration|sound\.Play|(sound\.PlayFile)|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/))(?:([A-Za-z0-9_]+?)!)?([^\s]+\/?)?/;
+const REGEXP_SOUND_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound))|Sound|SoundDuration|sound\.Play(?:File)?|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/)([^\s]+\/)?/;
+const REGEXP_MODEL_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:SetModel|SetWeaponModel))|Model|IsUselessModel|ClientsideModel|CreatePhysCollidesFromModel|ents\.FindByModel|NumModelSkins|player_manager\.TranslateToPlayerModelName|util\.(?:PrecacheModel|GetModelInfo|GetModelMeshes|IsModelLoaded|IsValidModel|IsValidProp)|ents\.CreateClientProp)\s*\(\s*(?:["']|\[=*\[)(?:models\/)?|models\/)([^\s]+\/)?/;
+
+// ASCII hover
+const REGEXP_ASCII_HOVER = /(?:\\\d+)+/g;
 
 class GLua {
 	constructor(extension) {
+		console.time("vscode-glua")
 		console.log("vscode-glua loading...");
 
 		this.extension = extension;
@@ -32,29 +40,59 @@ class GLua {
 		this.registerSubscriptions();
 
 		console.log("vscode-glua activated");
+		console.timeEnd("vscode-glua")
+	}
+
+	provideCompletionItems(document, pos, cancel, ctx, generic) {
+		let term = this.getCompletionTerm(document, pos);
+
+		let provideFunc = [];
+		switch(generic ? ctx.triggerCharacter : term[term.length-1]) {
+			case "/":
+				provideFunc.push(this.provideFilePathCompletionItem);
+				break;
+			
+			case "(":
+			case ":":
+			case ".":
+				provideFunc.push(this.provideSpecializedCompletionItems);
+				break;
+			
+			case "\"":
+			case "'":
+			case "[":
+				provideFunc.push(this.provideFilePathCompletionItem);
+				provideFunc.push(this.provideStringCompletionItems);
+				break;
+
+			default:
+				if (generic) {
+					provideFunc.push(this.provideSpecializedCompletionItems);
+					provideFunc.push(this.provideGeneralizedCompletionItems);
+				}
+		}
+		
+		if (provideFunc.length > 0) {
+			for (let i = 0; i < provideFunc.length; i++) {
+				let provided = provideFunc[i](this, document, pos, cancel, ctx, term);
+				if (provided) return provided;
+			}
+		}
 	}
 
 	registerSubscriptions() {
 		// this.extension.subscriptions.push(vscode.languages.registerSignatureHelpProvider("glua", this, "(", ","));
 		this.extension.subscriptions.push(vscode.languages.registerColorProvider("glua", this));
-		// this.extension.subscriptions.push(vscode.languages.registerHoverProvider("glua", this));
+		this.extension.subscriptions.push(vscode.languages.registerHoverProvider("glua", this));
 
 		let GLua = this;
 		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
 			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos, cancel) { return GLua.provideFilePathCompletionItem(GLua.getCompletionTerm(document, pos), cancel) }
-		}, "/", "\"", "'", "["));
+			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideCompletionItems(document, pos, cancel, ctx, false) }
+		}, ".", "\"", "'", ":", "[", "(", "/", ""));
 		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
 			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos) { return GLua.provideStringCompletionItems(GLua.getCompletionTerm(document, pos)) }
-		}, "\"", "'", "["));
-		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
-			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos, token, ctx) { return GLua.provideSpecializedCompletionItems(GLua.getCompletionTerm(document, pos), ctx) }
-		}, ".", ":", "("));
-		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
-			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos) { return GLua.provideGeneralizedCompletionItems(GLua.getCompletionTerm(document, pos)) }
+			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideCompletionItems(document, pos, cancel, ctx, true) }
 		}));
 	}
 
@@ -94,8 +132,6 @@ class GLua {
 		// TODO
 	}
 
-	// FIXME function xxx doesnt autocomplete meta tables
-
 	resolveCompletionItem(item) {
 		if (item.DOC_TAG === false) return;
 
@@ -127,9 +163,11 @@ class GLua {
 			let flags = [];
 			
 			if ("CLIENT" in doc || "MENU" in doc || "SERVER" in doc) flags.push(this.getRealmIcon(doc["CLIENT"], doc["MENU"], doc["SERVER"]));
+			if ("NEW" in doc) flags.push(this.getLabelIcon("new"));
 			if ("DEPRECATED" in doc) flags.push(this.getLabelIcon("deprecated"));
 			if ("INTERNAL" in doc) flags.push(this.getLabelIcon("internal"));
 			if ("REF_ONLY" in doc) flags.push(this.getLabelIcon("reference_only"));
+			if ("PREDICTED" in doc) flags.push(this.getLabelIcon("predicted"));
 			markdown.push(flags.join(" "));
 
 			markdown.push("**" + escape(item.label) + "**")
@@ -172,107 +210,84 @@ class GLua {
 
 	// TODO hook.Call should show all hooks, not just gm
 
-	provideStringCompletionItems(term) {
+	provideStringCompletionItems(GLua, document, pos, cancel, ctx, term) {
 		let vgui_create = term.match(REGEXP_VGUI_CREATE);
-		if (vgui_create) return this.panelCompletions;
+		if (vgui_create) return GLua.panelCompletions;
 
-		if (term.match(REGEXP_GAMEMODE_HOOK_COMPLETIONS)) return this.hookCompletions["GM"];
+		if (term.match(REGEXP_GAMEMODE_HOOK_COMPLETIONS)) return GLua.hookCompletions["GM"];
 	}
 
-	provideGeneralizedCompletionItems(term) {
-		let enum_match = term.match(REGEXP_ENUM_COMPLETIONS);
-		if (enum_match && !enum_match[1] && enum_match[2]) return this.enumCompletions;
+	provideGeneralizedCompletionItems(GLua, document, pos, cancel, ctx, term) {
+		if (term.length >= 3) {
+			let enum_match = term.match(REGEXP_ENUM_COMPLETIONS);
+			if (enum_match && !enum_match[1] && enum_match[2]) return GLua.enumCompletions;
+		}
+
+		let func_decl_match = term.match(REGEXP_FUNC_DECL_COMPLETIONS);
+		if (func_decl_match && !func_decl_match[1]) {
+			// Hack to make sure it replaces (function )EFFECT:...
+			// TODO move GLua to resolve? could be more optimized
+			let range = new vscode.Range(pos.line, func_decl_match.index, pos.line, pos.character);
+			for (let i = 0; i < GLua.functionDeclCompletions.items.length; i++) GLua.functionDeclCompletions.items[i].range = range;
+
+			if (!func_decl_match[3] && (!func_decl_match[2] || func_decl_match[2].length === 0 || func_decl_match[2].toUpperCase() !== func_decl_match[2])) {
+				return new vscode.CompletionList(GLua.genericCompletions.items.concat(GLua.functionDeclCompletions.items), true);
+			} else {
+				return GLua.functionDeclCompletions;
+			}
+		}
 
 		let term_reverse = "";
 		for (var i = term.length - 1; i >= 0; i--) term_reverse += term[i];
 
 		let global_match = term_reverse.match(REGEXP_GLOBAL_COMPLETIONS);
-		if (global_match) return this.globalCompletions;
+		if (global_match) {
+			if (global_match[1]) {
+				// function Global...
+				return GLua.globalCompletions;
+			} else {
+				return GLua.genericCompletions;
+			}
+		}
 	}
 
-	provideSpecializedCompletionItems(term, ctx) {
+	provideSpecializedCompletionItems(GLua, document, pos, cancel, ctx, term) {
 		let func_match = term.match(REGEXP_FUNC_COMPLETIONS);
 		if (func_match) {
+			let func_ctx = func_match[1];
+			let func_name = func_match[2];
+			let func_call = func_match[3];
+		
 			// Check for hook definitions first
-			if (func_match[2] === ":") {
-				let hook_family = (func_match[1] === "GAMEMODE" ? "GM" : func_match[1]);
-				if (hook_family in this.hookCompletions) {
-					return this.hookCompletions[hook_family];
+			if (func_call === ":") {
+				let hook_family = (func_name === "GAMEMODE" ? "GM" : func_name);
+				if (hook_family in GLua.hookCompletions) {
+					return GLua.hookCompletions[hook_family];
 				}
 			}
 
 			// Then check for struct definition
-			if (func_match[2] === ".") {
-				let struct = (func_match[1] === "GAMEMODE" ? "GM" : func_match[1]);
-				if (struct in this.structCompletions) {
-					return this.structCompletions[struct];
+			if (func_call === ".") {
+				let struct = (func_name === "GAMEMODE" ? "GM" : func_name);
+				if (struct in GLua.structCompletions) {
+					return GLua.structCompletions[struct];
 				}
 			}
 
-			if (func_match[1] in this.libraryFuncCompletions) {
-				if (this.libraryFuncCompletions[func_match[1]] !== true) {
-					return this.libraryFuncCompletions[func_match[1]];
+			if (func_name in GLua.libraryFuncCompletions) {
+				if (GLua.libraryFuncCompletions[func_name] !== true) {
+					return GLua.libraryFuncCompletions[func_name];
 				} else {
 					// It's a confirmed library function, we don't want to show the meta functions, so we do nothing here.
 				}
-			} else if (func_match[2] === ":" || ctx.triggerKind === vscode.CompletionTriggerKind.Invoke) {
-				return this.metaFuncCompletions;
+			} else if (!func_ctx && (func_call === ":" || ctx.triggerKind === vscode.CompletionTriggerKind.Invoke)) {
+				return GLua.metaFuncCompletions;
 			}
 		}
 	}
 
-	provideFilePathCompletionItem(term, cancel) {
+	provideFilePathCompletionItem(GLua, document, pos, cancel, ctx, term) {
 		if (cancel.isCancellationRequested) return;
-
-		let icons_match = term.match(REGEXP_ICON_COMPLETIONS);
-		if (icons_match){
-			switch(icons_match[1]) {
-				case "icon":
-					return this.icon16;
-				
-				case "flags":
-					return this.flags16;
-			}
-		}
-
-		let materials_match = term.match(REGEXP_MATERIAL_COMPLETIONS);
-		if (materials_match) {
-			return new Promise((resolve, reject) => {
-				Promise.resolve(vscode.workspace.findFiles("materials/" + (materials_match[1] !== undefined ? materials_match[1] : "") + "**/*.{png,vmt}", undefined, undefined, cancel)).then(results => {
-
-					let showWorkspaceFolder = vscode.workspace.workspaceFolders === undefined ? false : vscode.workspace.workspaceFolders.length > 1;
-
-					let completions = new vscode.CompletionList();
-					for (let i = 0; i < results.length; i++) {
-						let file = results[i];
-						let relPath = vscode.workspace.asRelativePath(file, showWorkspaceFolder);
-						let relPathNoWorkspace = showWorkspaceFolder ? relPath.replace(/^.+?\//, "") : relPath;
-
-						let insertText = relPathNoWorkspace.substr("materials/".length);
-						if (materials_match[1] !== undefined) insertText = insertText.substr(materials_match[1].length);
-						
-						let completionItem;
-						if (relPath.endsWith(".vmt")) {
-							insertText = insertText.substr(0, insertText.length - ".vmt".length);
-
-							completionItem = new vscode.CompletionItem(relPath, vscode.CompletionItemKind.File);
-							this.docs[relPath] = { "VMT": file };
-						} else {
-							completionItem = new vscode.CompletionItem(relPath, vscode.CompletionItemKind.File);
-							this.docs[relPath] = { "RAW_IMAGE": file.fsPath };
-						}
-
-						completionItem.DOC_TAG = relPath;
-						completionItem.insertText = insertText;
-
-						completions.items.push(completionItem);
-					}
-
-					resolve(completions);
-
-				}).catch(reject);
-			});
-		}
 
 		let lua_match = term.match(REGEXP_LUA_COMPLETIONS);
 		if (lua_match) {
@@ -303,22 +318,266 @@ class GLua {
 			});
 		}
 
+		let models_match = term.match(REGEXP_MODEL_COMPLETIONS);
+		if (models_match) {
+			let path = (models_match[1] ? models_match[1] : "").split("/").filter((v) => v !== "").map((v) => v + "/");
+		
+			// Search workspace
+			return new Promise(resolve => { new Promise(resolve => {
+
+				if (ctx.triggerKind === vscode.CompletionTriggerKind.TriggerCharacter) {
+					// Refresh the model files cache
+
+					Promise.resolve(vscode.workspace.findFiles("models/**/*.mdl", undefined, undefined, cancel)).then(results => {
+						if (results && results.length > 0) {
+							let showWorkspaceFolder = vscode.workspace.workspaceFolders === undefined ? false : vscode.workspace.workspaceFolders.length > 1;
+
+							GLua.workspace_model_files = new vscode.CompletionList(undefined, false);
+
+							for (let i = 0; i < results.length; i++) {
+								let file = results[i];
+								let relPath = vscode.workspace.asRelativePath(file, showWorkspaceFolder);
+								let relPathNoWorkspace = showWorkspaceFolder ? relPath.replace(/^.+?\//, "") : relPath;
+
+								let folderTreeStack = GLua.workspace_model_files;
+								let relPathTree = relPathNoWorkspace.replace(/^models\//, "").split("/");
+								for (let j = 0; j < relPathTree.length - 1; j++) {
+									let folder = relPathTree[j] + "/";
+									if (folder.length === 0) continue;
+
+									if (!(folder in folderTreeStack)) {
+										let folderCompletionItem = new vscode.CompletionItem(folder, vscode.CompletionItemKind.Folder);
+										folderCompletionItem.DOC_TAG = false;
+										folderCompletionItem.insertText = relPathTree[j];
+										folderCompletionItem.sortText = "0";
+
+										folderTreeStack.items.push(folderCompletionItem);
+										folderTreeStack[folder] = new vscode.CompletionList(undefined, false);
+									}
+
+									folderTreeStack = folderTreeStack[folder];
+								}
+
+								let fileName = relPathTree[relPathTree.length - 1];
+								
+								let completionItem = new vscode.CompletionItem(fileName, vscode.CompletionItemKind.File);
+								completionItem.sortText = "1";
+								completionItem.DOC_TAG = false;
+								folderTreeStack.items.push(completionItem);
+							}
+							
+						} else delete GLua.workspace_model_files;
+
+						resolve();
+					
+					}).catch(() => resolve);
+				
+				} else resolve();
+
+			}).then(() => {
+
+				if (GLua.workspace_model_files) {
+					let traverseWorkspaceStack = GLua.workspace_model_files;
+
+					for (let i = 0; i < path.length; i++) {
+						if (path[i] in traverseWorkspaceStack) {
+							traverseWorkspaceStack = traverseWorkspaceStack[path[i]];
+						} else {
+							traverseWorkspaceStack = null; break;
+						}
+					}
+
+					resolve(traverseWorkspaceStack);
+				} else {
+					resolve(null);
+				}
+
+			}); });
+		}
+
+		let materials_match = term.match(REGEXP_MATERIAL_COMPLETIONS);
+		if (materials_match) {
+			let path = (materials_match[1] ? materials_match[1] : "").split("/").filter((v) => v !== "").map((v) => v + "/");
+
+			let traverseStack = GLua.materials;
+			for (let i = 0; i < path.length; i++) {
+				if (path[i] in traverseStack)
+					traverseStack = traverseStack[path[i]];
+				else {
+					traverseStack = null; break;
+				}
+			}
+		
+			// Search workspace
+			return new Promise(resolve => { new Promise(resolve => {
+
+				if (ctx.triggerKind === vscode.CompletionTriggerKind.TriggerCharacter) {
+					// Refresh the material files cache
+
+					Promise.resolve(vscode.workspace.findFiles("materials/**/*.{png,vmt}", undefined, undefined, cancel)).then(results => {
+						if (results && results.length > 0) {
+							let showWorkspaceFolder = vscode.workspace.workspaceFolders === undefined ? false : vscode.workspace.workspaceFolders.length > 1;
+
+							GLua.workspace_material_files = new vscode.CompletionList(undefined, false);
+
+							for (let i = 0; i < results.length; i++) {
+								let file = results[i];
+								let relPath = vscode.workspace.asRelativePath(file, showWorkspaceFolder);
+								let relPathNoWorkspace = showWorkspaceFolder ? relPath.replace(/^.+?\//, "") : relPath;
+
+								let folderTreeStack = GLua.workspace_material_files;
+								let relPathTree = relPathNoWorkspace.replace(/^materials\//, "").split("/");
+								for (let j = 0; j < relPathTree.length - 1; j++) {
+									let folder = relPathTree[j] + "/";
+									if (folder.length === 0) continue;
+
+									if (!(folder in folderTreeStack)) {
+										let folderCompletionItem = new vscode.CompletionItem(folder, vscode.CompletionItemKind.Folder);
+										folderCompletionItem.DOC_TAG = false;
+										folderCompletionItem.insertText = relPathTree[j];
+										folderCompletionItem.sortText = "0";
+
+										folderTreeStack.items.push(folderCompletionItem);
+										folderTreeStack[folder] = new vscode.CompletionList(undefined, false);
+									}
+
+									folderTreeStack = folderTreeStack[folder];
+								}
+
+								let fileName = relPathTree[relPathTree.length - 1];
+								
+								let completionItem = new vscode.CompletionItem(fileName, vscode.CompletionItemKind.File);
+								completionItem.sortText = "1";
+								completionItem.DOC_TAG = relPath;
+								folderTreeStack.items.push(completionItem);
+
+								if (fileName.endsWith(".vmt")) {
+									GLua.docs[relPath] = { "VMT": file };
+								} else {
+									GLua.docs[relPath] = { "RAW_IMAGE": file.fsPath };
+								}
+							}
+							
+						} else delete GLua.workspace_material_files;
+
+						resolve();
+					
+					}).catch(() => resolve);
+				
+				} else resolve();
+
+			}).then(() => {
+
+				if (GLua.workspace_material_files) {
+					let traverseWorkspaceStack = GLua.workspace_material_files;
+
+					for (let i = 0; i < path.length; i++) {
+						if (path[i] in traverseWorkspaceStack) {
+							traverseWorkspaceStack = traverseWorkspaceStack[path[i]];
+						} else {
+							traverseWorkspaceStack = null; break;
+						}
+					}
+
+					if (traverseStack && traverseWorkspaceStack) {
+						resolve(new vscode.CompletionList(traverseStack.items.concat(traverseWorkspaceStack.items), false));
+					} else {
+						resolve(traverseWorkspaceStack ? traverseWorkspaceStack : (traverseStack ? traverseStack : null));
+					}
+				} else {
+					resolve(traverseStack ? traverseStack : null);
+				}
+
+			}); });
+		}
+
 		let snd_match = term.match(REGEXP_SOUND_COMPLETIONS);
 		if (snd_match) {
-			// let func = snd_match[1];
-			let game = (snd_match[2] ? (snd_match[2] in this.sounds ? snd_match[2] : "all") : "all");
-			let path = (snd_match[3] ? snd_match[3] : "").split("/").filter((v) => v !== "").map((v) => v + "/");
-
-			if (path == "") return this.sounds.list;
-
-			let traverseStack = this.sounds[game];
+			let path = (snd_match[1] ? snd_match[1] : "").split("/").filter((v) => v !== "").map((v) => v + "/");
+			
+			let traverseStack = GLua.sounds.all;
 			for (let i = 0; i < path.length; i++) {
-				traverseStack = traverseStack[path[i]];
+				if (path[i] in traverseStack)
+					traverseStack = traverseStack[path[i]];
+				else {
+					traverseStack = null; break;
+				}
 			}
+		
+			// Search workspace
+			return new Promise(resolve => { new Promise(resolve => {
 
-			if (traverseStack) {
-				return traverseStack;
-			}
+				console.log(ctx);
+				if (ctx.triggerKind === vscode.CompletionTriggerKind.TriggerCharacter) {
+					// Refresh the sound files cache
+
+					Promise.resolve(vscode.workspace.findFiles("sound/**/*.*", undefined, undefined, cancel)).then(results => {
+						if (results && results.length > 0) {
+							let showWorkspaceFolder = vscode.workspace.workspaceFolders === undefined ? false : vscode.workspace.workspaceFolders.length > 1;
+
+							GLua.workspace_sound_files = new vscode.CompletionList(undefined, false);
+
+							for (let i = 0; i < results.length; i++) {
+								let file = results[i];
+								let relPath = vscode.workspace.asRelativePath(file, showWorkspaceFolder);
+								let relPathNoWorkspace = showWorkspaceFolder ? relPath.replace(/^.+?\//, "") : relPath;
+
+								let folderTreeStack = GLua.workspace_sound_files;
+								let relPathTree = relPathNoWorkspace.replace(/^sound\//, "").split("/");
+								for (let j = 0; j < relPathTree.length - 1; j++) {
+									let folder = relPathTree[j] + "/";
+									if (folder.length === 0) continue;
+
+									if (!(folder in folderTreeStack)) {
+										let folderCompletionItem = new vscode.CompletionItem(folder, vscode.CompletionItemKind.Folder);
+										folderCompletionItem.DOC_TAG = false;
+										folderCompletionItem.insertText = relPathTree[j];
+										folderCompletionItem.sortText = "00";
+
+										folderTreeStack.items.push(folderCompletionItem);
+										folderTreeStack[folder] = new vscode.CompletionList(undefined, false);
+									}
+
+									folderTreeStack = folderTreeStack[folder];
+								}
+								
+								let completionItem = new vscode.CompletionItem(relPathTree[relPathTree.length - 1], vscode.CompletionItemKind.File);
+								completionItem.DOC_TAG = false;
+								completionItem.sortText = "01";
+								folderTreeStack.items.push(completionItem);
+							}
+							
+						} else delete GLua.workspace_sound_files;
+
+						resolve();
+					
+					}).catch(() => resolve);
+				
+				} else resolve();
+
+			}).then(() => {
+
+				if (GLua.workspace_sound_files) {
+					let traverseWorkspaceStack = GLua.workspace_sound_files;
+
+					for (let i = 0; i < path.length; i++) {
+						if (path[i] in traverseWorkspaceStack) {
+							traverseWorkspaceStack = traverseWorkspaceStack[path[i]];
+						} else {
+							traverseWorkspaceStack = null; break;
+						}
+					}
+
+					if (traverseStack && traverseWorkspaceStack) {
+						resolve(new vscode.CompletionList(traverseStack.items.concat(traverseWorkspaceStack.items), false));
+					} else {
+						resolve(traverseWorkspaceStack ? traverseWorkspaceStack : (traverseStack ? traverseStack : null));
+					}
+				} else {
+					resolve(traverseStack ? traverseStack : null);
+				}
+
+			}); });
 		}
 	}
 
@@ -374,7 +633,21 @@ class GLua {
 	}
 
 	provideHover(document, pos, cancel) {
-		// TODO
+		if (cancel.isCancellationRequested) return;
+		
+		let line = document.lineAt(pos);
+
+		REGEXP_ASCII_HOVER.lastIndex = 0; // reset match position
+		var match;
+		while ((match = REGEXP_ASCII_HOVER.exec(line.text)) !== null) {
+			try {
+				let ascii_range = new vscode.Range(line.lineNumber, match.index, line.lineNumber, match.index + match[0].length);
+				if (ascii_range.contains(pos)) {
+					let bytes = String.fromCharCode(...match[0].split("\\"));
+					return new vscode.Hover(new vscode.MarkdownString("```lua\n" + bytes + "\n```"), ascii_range);
+				}
+			} catch(e) {}
+		}
 	}
 
 	createCompletionItem(tag, label, kind, item_def, display_label, insert_text) {
@@ -405,12 +678,10 @@ class GLua {
 		return completionItem;
 	}
 
-	// TODO fix sound/garrysmod /
-
 	initSounds() {
 		let GLua = this;
 
-		this.sounds = { list: new vscode.CompletionList(undefined, true), all: new vscode.CompletionList(undefined, true) };
+		this.sounds = { list: new vscode.CompletionList(undefined, false), all: new vscode.CompletionList(undefined, false) };
 
 		let sound_game_sort = {"garrysmod": "1", "hl2": "2", "css": "3", "tf2": "4"};
 
@@ -421,102 +692,116 @@ class GLua {
 			for (let i = 0; i < sounds_tree.files.length; i++) {
 				let file = sounds_tree.files[i];
 
-				let displayPath = game + " " + sounds_tree.path + file;
-
-				let completionItem = new vscode.CompletionItem(game + " " + displayPath, vscode.CompletionItemKind.File);
+				var completionItem = new vscode.CompletionItem(game + "! " + file, vscode.CompletionItemKind.File);
 				completionItem.detail = "(" + game + ")";
 				completionItem.DOC_TAG = false;
-				completionItem.insertText = sounds_tree.path + file;
-				completionItem.sortText = game in sound_game_sort ? ("1" + sound_game_sort[game]) : "15";
-
-				GLua.sounds.list.items.push(Object.create(completionItem));
 				completionItem.insertText = file;
-				completionItem.label = game + " " + file;
+				completionItem.sortText = game in sound_game_sort ? ("2" + sound_game_sort[game]) : "25";
 				
 				let folders = sounds_tree.path.replace(/\/$/, "").split("/");
 				let traverseStack = GLua.sounds.all;
 				let traverseStackGame = GLua.sounds[game];
 				for (let j = 0; j < folders.length; j++) {
-					let last = j === folders.length - 1;
 					let folder = folders[j] + "/";
 
 					if (!(folder in traverseStack) || !(folder in traverseStackGame)) {
-						let folderCompletionItem = new vscode.CompletionItem(game + " " + folder, vscode.CompletionItemKind.Folder);
+						let folderCompletionItem = new vscode.CompletionItem(game + "! " + folder, vscode.CompletionItemKind.Folder);
 						folderCompletionItem.detail = completionItem.detail;
 						folderCompletionItem.DOC_TAG = false;
 						folderCompletionItem.insertText = folder;
-						folderCompletionItem.sortText = game in sound_game_sort ? ("0" + sound_game_sort[game]) : "05";
+						folderCompletionItem.sortText = game in sound_game_sort ? ("1" + sound_game_sort[game]) : "15";
 
-						if (j === 0) {
-							GLua.sounds.list.items.push(folderCompletionItem);
-						}
 						if (!(folder in traverseStack)) {
 							traverseStack.items.push(folderCompletionItem);
-							traverseStack[folder] = new vscode.CompletionList(undefined, true);
+							
+							traverseStack[folder] = new vscode.CompletionList(undefined, false);
 						}
 						if (!(folder in traverseStackGame)) {
-							traverseStackGame.items.push(folderCompletionItem);
-							traverseStackGame[folder] = new vscode.CompletionList(undefined, true);
+							let gameCompletionItem = Object.create(folderCompletionItem);
+							gameCompletionItem.label = folder;
+							traverseStackGame.items.push(gameCompletionItem);
+
+							traverseStackGame[folder] = new vscode.CompletionList(undefined, false);
 						}
 					}
+
 					traverseStack = traverseStack[folder];
 					traverseStackGame = traverseStackGame[folder];
 				
-					if (last) {
+					if (j === folders.length - 1) {
 						traverseStack.items.push(completionItem);
-						traverseStackGame.items.push(completionItem);
+						
+						let gameCompletionItem = Object.create(completionItem);
+						gameCompletionItem.label = file;
+						traverseStackGame.items.push(gameCompletionItem);
 					}
 				}
+
+				var completionItem = Object.create(completionItem);
+				completionItem.insertText = sounds_tree.path + file;
+				completionItem.label = game + "! " + sounds_tree.path + file;
 			}
 		}
 		for (const [game, sounds_tree] of Object.entries(require("../resources/sounds.json"))) {
-			this.sounds[game] = new vscode.CompletionList(undefined, true);
+			this.sounds[game] = new vscode.CompletionList(undefined, false);
 			step(game, sounds_tree, sounds_tree.path);
 		}
+
+		console.log("vscode-glua initialized sounds");
 	}
 
 	initMaterials() {
-		this.materials = { list: new vscode.CompletionList() };
-		
-		// TODO better materials browser (like sounds)
+		this.materials = new vscode.CompletionList();
+		this.materials["icon16/"] = new vscode.CompletionList();
+		this.materials["flags16/"] = new vscode.CompletionList();
+
+		let icon16 = this.createCompletionItem(undefined, "icon16/", vscode.CompletionItemKind.Folder);
+		icon16.DOC_TAG = false;
+		icon16.sortText = "2";
+		this.materials.items.push(icon16);
+
+		let flags16 = this.createCompletionItem(undefined, "flags16/", vscode.CompletionItemKind.Folder);
+		flags16.DOC_TAG = false;
+		flags16.sortText = "3";
+		this.materials.items.push(flags16);
+
+		fs.readdir(this.extension.asAbsolutePath("resources/materials/icon16/"), (err, files) => {
+			if (err) { console.warn("vscode-glua failed to read ../resources/materials/icon16/ (\"" + err + "\")") } else {
+				for (let i = 0; i < files.length; i++) {
+					let file = files[i];
+
+					let completionItem = this.createCompletionItem(undefined, file, vscode.CompletionItemKind.File, undefined, file);
+					completionItem.DOC_TAG = "materials/icon16/" + file;
+
+					this.materials["icon16/"].items.push(completionItem);
+					this.docs["materials/icon16/" + file] = { "RAW_IMAGE": this.extension.asAbsolutePath("resources/materials/icon16/" + file) };
+				}
+			}
+		});
+
+		fs.readdir(this.extension.asAbsolutePath("resources/materials/flags16/"), (err, files) => {
+			if (err) { console.warn("vscode-glua failed to read ../resources/materials/flags16/ (\"" + err + "\")") } else {
+				for (let i = 0; i < files.length; i++) {
+					let file = files[i];
+
+					let completionItem = this.createCompletionItem(undefined, file, vscode.CompletionItemKind.File, undefined, file);
+					completionItem.DOC_TAG = "materials/flags16/" + file;
+
+					this.materials["flags16/"].items.push(completionItem);
+					this.docs["materials/flags16/" + file] = { "RAW_IMAGE": this.extension.asAbsolutePath("resources/materials/flags16/" + file) };
+				}
+			}
+		});
+
+		console.log("vscode-glua initialized materials");
 	}
 
 	initResources() {
 		this.initSounds();
 		this.initMaterials();
 
-		let GLua = this;
-
-		this.flags16 = new vscode.CompletionList();
-		fs.readdir(this.extension.asAbsolutePath("resources/materials/flags16/"), (err, files) => {
-			if (err) { console.warn("vscode-glua failed to read ../resources/materials/flags16/ (\"" + err + "\")") } else {
-				for (let i = 0; i < files.length; i++) {
-					let file = files[i];
-					let completionItem = this.createCompletionItem(undefined, file, vscode.CompletionItemKind.File, undefined, file);
-					completionItem.DOC_TAG = "materials/flags16/" + file;
-					GLua.flags16.items.push(completionItem);
-					GLua.docs["materials/flags16/" + file] = { "RAW_IMAGE": this.extension.asAbsolutePath("resources/materials/flags16/" + file) };
-				}
-			}
-		});
-
-		this.icon16 = new vscode.CompletionList();
-		fs.readdir(this.extension.asAbsolutePath("resources/materials/icon16/"), (err, files) => {
-			if (err) { console.warn("vscode-glua failed to read ../resources/materials/icon16/ (\"" + err + "\")") } else {
-				for (let i = 0; i < files.length; i++) {
-					let file = files[i];
-					let completionItem = this.createCompletionItem(undefined, file, vscode.CompletionItemKind.File, undefined, file);
-					completionItem.DOC_TAG = "materials/icon16/" + file;
-					GLua.icon16.items.push(completionItem);
-					GLua.docs["materials/icon16/" + file] = { "RAW_IMAGE": this.extension.asAbsolutePath("resources/materials/icon16/" + file) };
-				}
-			}
-		});
-
 		console.log("vscode-glua initialized resources");
 	}
-
-	// TODO models/ browser
 
 	initWiki() {
 		let GLua = this;
@@ -534,28 +819,30 @@ class GLua {
 		this.getLabelIcon("internal");
 		this.getLabelIcon("deprecated");
 		this.getLabelIcon("reference_only");
-		this.getLabelIcon("new"); // TODO
-		this.getLabelIcon("predicted"); // TODO
+		this.getLabelIcon("new");
+		this.getLabelIcon("predicted");
 
 		this.wiki = require("../resources/wiki.json");
 		this.docs = {};
-		this.enumCompletions = new vscode.CompletionList();
-		this.globalCompletions = new vscode.CompletionList();
-		this.panelCompletions = new vscode.CompletionList();
-		this.metaFuncCompletions = new vscode.CompletionList(); // also include hooks here
-		this.hookCompletions = {};
-		this.libraryFuncCompletions = {};
-		this.structCompletions = {};
+		this.genericCompletions = new vscode.CompletionList(undefined, true);      // contains enums, globals, libraries, panels
+		this.enumCompletions = new vscode.CompletionList(undefined, true);         // enums only
+		this.globalCompletions = new vscode.CompletionList(undefined, true);       // globals only
+		this.panelCompletions = new vscode.CompletionList(undefined, true);        // panels only
+		this.functionDeclCompletions = new vscode.CompletionList(undefined, true); // Structs and hook families only
+		this.metaFuncCompletions = new vscode.CompletionList();                    // meta:Functions() only, but also include hooks here
+		this.hookCompletions = {};                                                 // hooks only
+		this.libraryFuncCompletions = {};                                          // library.functions() only
+		this.structCompletions = {};                                               // STRUCT and STRUCT.VAR = VAL only
 
 		for (const [key, entries] of Object.entries(this.wiki)) {
 			switch (key) {
 				case "HOOKS":
-					for (const [hook_family, hooks] of Object.entries(entries)) {
-						this.hookCompletions[hook_family] = new vscode.CompletionList();
+					for (const [hook_family, hook_family_def] of Object.entries(entries)) {
+						this.hookCompletions[hook_family] = new vscode.CompletionList(undefined, true);
 
 						let add_to_meta = hook_family != "GM" && hook_family != "GAMEMODE";
 						if (add_to_meta && !(hook_family in this.metaFuncCompletions)) this.metaFuncCompletions[hook_family] = {};
-						for (const [hook_name, hook_def] of Object.entries(hooks["MEMBERS"])) {
+						for (const [hook_name, hook_def] of Object.entries(hook_family_def["MEMBERS"])) {
 							let completionItem = this.createCompletionItem(
 								"HOOK",
 								hook_name,
@@ -566,40 +853,66 @@ class GLua {
 							if (add_to_meta) this.metaFuncCompletions.items.push(completionItem);
 							this.hookCompletions[hook_family].items.push(completionItem);
 						}
+
+						this.functionDeclCompletions.items.push(this.createCompletionItem(
+							"FUNC_DECL_HOOK",
+							"function " + hook_family + ":",
+							vscode.CompletionItemKind.Constructor,
+							hook_family_def,
+							hook_family + ":",
+							"function " + hook_family
+						));
+						
+						if (hook_family === "GM") {
+							hook_family_def["SEARCH"] = "GAMEMODE"
+							
+							this.functionDeclCompletions.items.push(this.createCompletionItem(
+								"FUNC_DECL_HOOK",
+								"function GAMEMODE:",
+								vscode.CompletionItemKind.Constructor,
+								hook_family_def,
+								"GAMEMODE:",
+								"function GAMEMODE"
+							));
+						}
 					}
 					break;
 
 				case "LIBRARIES":
-					function step(entries, completions, prefix) {
+					function step(entries, completions, prefix, is_package) {
 						for (const [library, funcs] of Object.entries(entries)) {
 							if ("MEMBERS" in funcs) {
-								(!completions.items ? GLua.globalCompletions : completions).items.push(GLua.createCompletionItem(
+								let completionItem = GLua.createCompletionItem(
 									"PACKAGE",
 									prefix + library,
 									vscode.CompletionItemKind.Module,
 									funcs,
 									undefined,
 									library
-								));
+								);
+								if (!is_package && !("DESCRIPTION" in funcs)) completionItem.DOC_TAG = false;
+								(!completions.items ? GLua.globalCompletions : completions).items.push(completionItem);
 
 								GLua.libraryFuncCompletions[prefix + library] = new vscode.CompletionList();
-								step(funcs["MEMBERS"], GLua.libraryFuncCompletions[prefix + library], prefix + library + ".");
+								step(funcs["MEMBERS"], GLua.libraryFuncCompletions[prefix + library], prefix + library + ".", false);
 							} else {
 								// Mark this as a package.function() function
 								GLua.libraryFuncCompletions[prefix + library] = true;
 
-								completions.items.push(GLua.createCompletionItem(
+								let completionItem = GLua.createCompletionItem(
 									"FUNCTION",
 									prefix + library,
 									"FUNCTION" in funcs ? vscode.CompletionItemKind.Function : vscode.CompletionItemKind.Constant,
 									funcs,
 									undefined,
 									library
-								));
+								);
+								if (!is_package && !("DESCRIPTION" in funcs)) completionItem.DOC_TAG = false;
+								completions.items.push(completionItem);
 							}
 						}
 					}
-					step(entries, this.libraryFuncCompletions, "");
+					step(entries, this.libraryFuncCompletions, "", true);
 					break;
 
 				case "CLASSES":
@@ -635,25 +948,37 @@ class GLua {
 					break;
 
 				case "STRUCTS":
-					for (const [struct_name, data] of Object.entries(entries)) {
-						let completionItem = this.createCompletionItem("STRUCT", struct_name, vscode.CompletionItemKind.Struct, data);
+					for (const [struct_name, struct_def] of Object.entries(entries)) {
+						let completionItem = this.createCompletionItem("STRUCT", struct_name, vscode.CompletionItemKind.Struct, struct_def);
 
 						this.globalCompletions.items.push(completionItem);
 
-						if (struct_name.toUpperCase() === struct_name) {
-							// If the struct is all upper case it will be detected as an enum whilst the user types, so we'll cheekily add it into the enums too
-							this.enumCompletions.items.push(completionItem);
-						}
+						let contains_a_function = false;
 
 						this.structCompletions[struct_name] = new vscode.CompletionList();
-						for (const [field_name, field_def] of Object.entries(data["MEMBERS"])) {
+						for (const [field_name, field_def] of Object.entries(struct_def["MEMBERS"])) {
+							let is_func = ("TYPE" in field_def && field_def["TYPE"] === "function");
+
 							this.structCompletions[struct_name].items.push(this.createCompletionItem(
 								"STRUCT_FIELD",
 								field_name,
-								("TYPE" in field_def && field_def["TYPE"] === "function") ? vscode.CompletionItemKind.Event : vscode.CompletionItemKind.Struct,
+								is_func ? vscode.CompletionItemKind.Event : vscode.CompletionItemKind.Struct,
 								field_def,
 								struct_name + "." + field_name,
-								field_name + " = "
+								is_func ? field_name : (field_name + " = ")
+							));
+
+							if (!contains_a_function && is_func) contains_a_function = true;
+						}
+						
+						if (contains_a_function && struct_name.toUpperCase() == struct_name) {
+							this.functionDeclCompletions.items.push(this.createCompletionItem(
+								"FUNC_DECL_STRUCT",
+								"function " + struct_name + ":",
+								vscode.CompletionItemKind.Struct,
+								struct_def,
+								struct_name + ":",
+								"function " + struct_name
 							));
 						}
 					}
@@ -683,16 +1008,14 @@ class GLua {
 
 		// Finally, a bit of extra data processing
 
-		// Stupid hack to merge D* named panels into Enums auto completions
-		for (let i = 0; i < this.panelCompletions.items.length; i++) {
-			if (this.panelCompletions.items[i].label.startsWith("D")) this.enumCompletions.items.push(this.panelCompletions.items[i]);
-		}
-
 		// Merge struct hooks into struct autocompletions
 		for (const [struct_name, completions] of Object.entries(this.structCompletions)) {
 			if (!(struct_name in this.hookCompletions)) continue;
 			completions.items = completions.items.concat(this.hookCompletions[struct_name].items);
 		}
+
+		// Create generic completions
+		this.genericCompletions.items = this.globalCompletions.items.concat(this.enumCompletions.items).concat(this.panelCompletions.items);
 
 		console.log("vscode-glua parsed wiki data successfully");
 	}

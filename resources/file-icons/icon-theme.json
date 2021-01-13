@@ -25,6 +25,9 @@
 		"_vtf": {
 			"iconPath": "./vtf.ico"
 		},
+		"_mdl": {
+			"iconPath": "./mdl.png"
+		},
 
 		"_R_light": {
 			"fontCharacter": "\\E001",
@@ -1426,6 +1429,11 @@
 	"fileExtensions": {
 		"vtf": "_vtf",
 		"vmt": "_vtf",
+		"vtx": "_mdl",
+		"mdl": "_mdl",
+		"vvd": "_mdl",
+		"phy": "_mdl",
+		"pcf": "_mdl",
 
 		"bsl": "_bsl",
 		"mdo": "_mdo",
@@ -1775,6 +1783,11 @@
 		"fileExtensions": {
 			"vtf": "_vtf",
 			"vmt": "_vtf",
+			"vtx": "_mdl",
+			"mdl": "_mdl",
+			"vvd": "_mdl",
+			"phy": "_mdl",
+			"pcf": "_mdl",
 			
 			"bsl": "_bsl_light",
 			"mdo": "_mdo_light",

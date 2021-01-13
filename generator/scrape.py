@@ -70,6 +70,7 @@ class WikiParser:
 		"event": "EVENT",
 		"method": "METHOD",
 		"f": "FUNCTION",
+		"new": "NEW",
 	}
 	def add_class_defs(self, obj, classes, force_non_deprecated=False):
 		for class_name, key in self.CLASS_DEFS.items():
@@ -441,6 +442,7 @@ class WikiParser:
 			if not parent in self.PARSED["HOOKS"]:
 				hook_family_def = {}
 				hook_family_def["MEMBERS"] = {}
+				hook_family_def["SEARCH"] = parent
 				self.PARSED["HOOKS"][parent] = hook_family_def
 				self.queue_page_parse(self.parse_library, parent_href, hook_family_def)
 

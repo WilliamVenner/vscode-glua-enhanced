@@ -3,7 +3,7 @@
 	"displayName": "GLua Enhanced",
 	"description": "GLua language support for Visual Studio Code",
 	"license": "GNU General Public License v3.0",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"engines": { "vscode": "^0.10.1" },
 	"icon": "resources/logo.png",
 	"publisher": "venner",
@@ -51,7 +51,7 @@
 			{
 				"id": "glua",
 				"label": "GLua",
-				"path": "./resources/file-icon-theme.json"
+				"path": "./resources/file-icons/icon-theme.json"
 			}
 		]
 	},

@@ -14,17 +14,22 @@ Supercharge your Garry's Mod development experience!
 
 * Auto completion & wiki integration for almost everything in Garry's Mod
 * Client/Server/Menu flags
-* _Deprecated_, _Internal_, _Reference Only_, _Predicted_ flags
+* _Deprecated_, _Internal_, _Reference Only_, _Predicted_ and _New_ flags in documentation
 * Colour palette for `Color()`
 * Notes, Warnings, Bugs, imported from wiki
 * Useful snippets
-* File icons for `.lua`, `.vmt`, `.vtf`
+* File icons for `.lua`, `.vmt`, `.vtf`, `.mdl`, `*.vtx`, `.vvd`, `.phy`
 * `.png` & `.vmt` file previews
-* Workspace `materials/` file browser
-* Workspace `sound/` file browser
-* Default `sound/` file browser
-* `materials/flags16/` file browser
-* `materials/icon16/` file browser
+* Workspace `models/`, `materials/`, `sound/` and `lua/` autocompletion file browser
+* Default `sound/` autocompletion file browser
+* Default `materials/flags16/` autocompletion file browser
+* Default `materials/icon16/` autocompletion file browser
+
+## Recommended Companion Extensions
+
+### [All Autocomplete](https://marketplace.visualstudio.com/items?itemName=Atishay-Jain.All-Autocomplete)
+
+Mixes textual autocompletions and extension-provided autocompletions, and also includes textual autocompletions from all files in your workspace.
 
 ## Media
 
