@@ -134,7 +134,7 @@ class WikiParser:
 	def parse_view_source(self, item, item_def):
 		for src in CSSSelector(":scope > file")(item):
 			if "line" in src.attrib:
-				item_def["SRC"] = [src.text_content(), src.attrib["line"]]
+				item_def["SRC"] = [src.text_content(), src.attrib["line"].replace("L", "")]
 
 	def parse_text_content(self, item, item_def):
 		description = self.interpolate_wiki_links(item)

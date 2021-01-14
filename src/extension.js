@@ -9,12 +9,12 @@ const REGEXP_COLOR = /\bColor\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+
 const REGEXP_COLOR_REPLACER = /\b(Color\s*\(\s*)(\d+)(\s*,\s*)(\d+)(\s*,\s*)(\d+)(?:(\s*,\s*)(\d+))?(\s*\))/;
 const REGEXP_ENUM_COMPLETIONS = /((?:function|local)\s+)?(?<!\.|:)\b([A-Z][A-Z_\.]*)$/;
 const REGEXP_FUNC_COMPLETIONS = /\b(?:(function)\s+)?((?:[A-Za-z_][A-Za-z0-9_]*)+?)(\.|:)(?:[A-Za-z_][A-Za-z0-9_]*)?$/;
-const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1(?!\s*lacol)(\s*function)?/;
+const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1((?::|\.)(?:[A-Za-z0-9_]*[A-Za-z_])?)?(\s+noitcnuf\s+lacol)?/;
 
-const REGEXP_FUNC_DECL_COMPLETIONS = /(local\s+)?(?:function\s+([A-Za-z_][A-Za-z0-9_]*)?|(funct?i?o?n?))(?!:|\.)$/;
+const REGEXP_FUNC_DECL_COMPLETIONS = /(local\s+)?(?:function\s+([A-Za-z_][A-Za-z0-9_]*)?|(funct?i?o?n?))((?::|\.)(?:[A-Za-z_][A-Za-z0-9_]*)?)?$/;
 
 // String completions
-const REGEXP_GAMEMODE_HOOK_COMPLETIONS = /hook\.(?:Add|Remove|GetTable|Run|Call)\s*\((?:["']|\[=*\[)/;
+const REGEXP_GAMEMODE_HOOK_COMPLETIONS = /hook\.(Add|Remove|GetTable|Run|Call)\s*\((?:["']|\[=*\[)/;
 const REGEXP_VGUI_CREATE = /vgui\.Create\((?:["']|\[=*\[)$/;
 
 // File completions
@@ -27,6 +27,9 @@ const REGEXP_MODEL_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:SetModel|SetWeaponModel))|
 
 // ASCII hover
 const REGEXP_ASCII_HOVER = /(?:\\\d+)+/g;
+
+// Signature provider
+const REGEXP_SIGNATURE_PROVIDER = /(local\s+)?(?:([A-Za-z_][A-Za-z0-9_]*)(\.|:))?([A-Za-z_][A-Za-z0-9_]*)\((?!,)\s*([^\n\)]+)?\s*\)?/g;
 
 class GLua {
 	constructor(extension) {
@@ -43,43 +46,6 @@ class GLua {
 		console.timeEnd("vscode-glua")
 	}
 
-	provideCompletionItems(document, pos, cancel, ctx, generic) {
-		let term = this.getCompletionTerm(document, pos);
-
-		let provideFunc = [];
-		switch(generic ? ctx.triggerCharacter : term[term.length-1]) {
-			case "/":
-				provideFunc.push(this.provideFilePathCompletionItem);
-				break;
-			
-			case "(":
-			case ":":
-			case ".":
-				provideFunc.push(this.provideSpecializedCompletionItems);
-				break;
-			
-			case "\"":
-			case "'":
-			case "[":
-				provideFunc.push(this.provideFilePathCompletionItem);
-				provideFunc.push(this.provideStringCompletionItems);
-				break;
-
-			default:
-				if (generic) {
-					provideFunc.push(this.provideSpecializedCompletionItems);
-					provideFunc.push(this.provideGeneralizedCompletionItems);
-				}
-		}
-		
-		if (provideFunc.length > 0) {
-			for (let i = 0; i < provideFunc.length; i++) {
-				let provided = provideFunc[i](this, document, pos, cancel, ctx, term);
-				if (provided) return provided;
-			}
-		}
-	}
-
 	registerSubscriptions() {
 		// this.extension.subscriptions.push(vscode.languages.registerSignatureHelpProvider("glua", this, "(", ","));
 		this.extension.subscriptions.push(vscode.languages.registerColorProvider("glua", this));
@@ -88,11 +54,19 @@ class GLua {
 		let GLua = this;
 		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
 			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideCompletionItems(document, pos, cancel, ctx, false) }
-		}, ".", "\"", "'", ":", "[", "(", "/", ""));
+			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideFilePathCompletionItem(GLua, document, pos, cancel, ctx, GLua.getCompletionTerm(document, pos)) }
+		}, "/", "\"", "'", "["));
 		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
 			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideCompletionItems(document, pos, cancel, ctx, true) }
+			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideStringCompletionItems(GLua, document, pos, cancel, ctx, GLua.getCompletionTerm(document, pos)) }
+		}, "\"", "'", "["));
+		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
+			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
+			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideSpecializedCompletionItems(GLua, document, pos, cancel, ctx, GLua.getCompletionTerm(document, pos)) }
+		}, ".", ":", "("));
+		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
+			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
+			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideGeneralizedCompletionItems(GLua, document, pos, cancel, ctx, GLua.getCompletionTerm(document, pos)) }
 		}));
 	}
 
@@ -128,8 +102,26 @@ class GLua {
 		return url.replace(/[\[\]]/g, "\\$1").replace(/\\/g, "\\\\").replace(/ /g, "%20");
 	}
 
-	provideSignatureHelp(document, pos) {
-		// TODO
+	provideSignatureHelp(document, pos, cancel, ctx) {
+		let match;
+		while ((match = REGEXP_SIGNATURE_PROVIDER.exec(document.lineAt(pos).text)) !== null) {
+			if (match[1]) continue;
+
+			let library_or_meta = match[2];
+			let func_call = match[3];
+			let func_name = match[4];
+			let args = match[5];
+			
+			if (func_call === ":") {
+				// Show meta methods + hooks only
+			} else if (func_call === ".") {
+				// Show libraries first, then methods + hooks
+			} else {
+				// Show globals only
+				this.globalCompletions
+			}
+			console.log(match);
+		}
 	}
 
 	resolveCompletionItem(item) {
@@ -214,7 +206,14 @@ class GLua {
 		let vgui_create = term.match(REGEXP_VGUI_CREATE);
 		if (vgui_create) return GLua.panelCompletions;
 
-		if (term.match(REGEXP_GAMEMODE_HOOK_COMPLETIONS)) return GLua.hookCompletions["GM"];
+		let hook_completions = term.match(REGEXP_GAMEMODE_HOOK_COMPLETIONS);
+		if (hook_completions) {
+			if (hook_completions[1] == "Call") {
+				return GLua.hookCompletions;
+			} else {
+				return GLua.hookCompletions["GM"];
+			}
+		}
 	}
 
 	provideGeneralizedCompletionItems(GLua, document, pos, cancel, ctx, term) {
@@ -231,20 +230,28 @@ class GLua {
 			for (let i = 0; i < GLua.functionDeclCompletions.items.length; i++) GLua.functionDeclCompletions.items[i].range = range;
 
 			if (!func_decl_match[3] && (!func_decl_match[2] || func_decl_match[2].length === 0 || func_decl_match[2].toUpperCase() !== func_decl_match[2])) {
-				return new vscode.CompletionList(GLua.genericCompletions.items.concat(GLua.functionDeclCompletions.items), true);
+				return new vscode.CompletionList(GLua.genericFuncCompletions.items.concat(GLua.functionDeclCompletions.items), true);
 			} else {
 				return GLua.functionDeclCompletions;
 			}
 		}
 
+		let specializedCompletions = GLua.provideSpecializedCompletionItems(GLua, document, pos, cancel, ctx, term);
+		if (specializedCompletions) return;
+
 		let term_reverse = "";
 		for (var i = term.length - 1; i >= 0; i--) term_reverse += term[i];
 
 		let global_match = term_reverse.match(REGEXP_GLOBAL_COMPLETIONS);
-		if (global_match) {
+		if (global_match && !global_match[3]) {
 			if (global_match[1]) {
-				// function Global...
-				return GLua.globalCompletions;
+				if (global_match[2]) {
+					// function Global(.|:)whatever
+					return GLua.metaFuncCompletions;
+				} else {
+					// function Global...
+					return GLua.globalCompletions;
+				}
 			} else {
 				return GLua.genericCompletions;
 			}
@@ -259,7 +266,7 @@ class GLua {
 			let func_call = func_match[3];
 		
 			// Check for hook definitions first
-			if (func_call === ":") {
+			if (func_call === ":" || (func_call === "." && func_ctx === "function")) {
 				let hook_family = (func_name === "GAMEMODE" ? "GM" : func_name);
 				if (hook_family in GLua.hookCompletions) {
 					return GLua.hookCompletions[hook_family];
@@ -277,10 +284,12 @@ class GLua {
 			if (func_name in GLua.libraryFuncCompletions) {
 				if (GLua.libraryFuncCompletions[func_name] !== true) {
 					return GLua.libraryFuncCompletions[func_name];
+				} else if (func_ctx == "function") {
+					return GLua.metaFuncCompletions;
 				} else {
 					// It's a confirmed library function, we don't want to show the meta functions, so we do nothing here.
 				}
-			} else if (!func_ctx && (func_call === ":" || ctx.triggerKind === vscode.CompletionTriggerKind.Invoke)) {
+			} else if ((func_call === "." && func_ctx === "function") || (!func_ctx && (func_call === ":" || ctx.triggerKind === vscode.CompletionTriggerKind.Invoke))) {
 				return GLua.metaFuncCompletions;
 			}
 		}
@@ -507,7 +516,6 @@ class GLua {
 			// Search workspace
 			return new Promise(resolve => { new Promise(resolve => {
 
-				console.log(ctx);
 				if (ctx.triggerKind === vscode.CompletionTriggerKind.TriggerCharacter) {
 					// Refresh the sound files cache
 
@@ -825,12 +833,13 @@ class GLua {
 		this.wiki = require("../resources/wiki.json");
 		this.docs = {};
 		this.genericCompletions = new vscode.CompletionList(undefined, true);      // contains enums, globals, libraries, panels
+		this.genericFuncCompletions = new vscode.CompletionList(undefined, true);  // contains globals + meta functions
 		this.enumCompletions = new vscode.CompletionList(undefined, true);         // enums only
 		this.globalCompletions = new vscode.CompletionList(undefined, true);       // globals only
 		this.panelCompletions = new vscode.CompletionList(undefined, true);        // panels only
 		this.functionDeclCompletions = new vscode.CompletionList(undefined, true); // Structs and hook families only
-		this.metaFuncCompletions = new vscode.CompletionList();                    // meta:Functions() only, but also include hooks here
-		this.hookCompletions = {};                                                 // hooks only
+		this.metaFuncCompletions = new vscode.CompletionList(undefined, true);     // meta:Functions() only, but also include hooks here
+		this.hookCompletions = new vscode.CompletionList(undefined, true);         // hooks only
 		this.libraryFuncCompletions = {};                                          // library.functions() only
 		this.structCompletions = {};                                               // STRUCT and STRUCT.VAR = VAL only
 
@@ -852,6 +861,7 @@ class GLua {
 							);
 							if (add_to_meta) this.metaFuncCompletions.items.push(completionItem);
 							this.hookCompletions[hook_family].items.push(completionItem);
+							this.hookCompletions.items.push(completionItem);
 						}
 
 						this.functionDeclCompletions.items.push(this.createCompletionItem(
@@ -893,7 +903,7 @@ class GLua {
 								if (!is_package && !("DESCRIPTION" in funcs)) completionItem.DOC_TAG = false;
 								(!completions.items ? GLua.globalCompletions : completions).items.push(completionItem);
 
-								GLua.libraryFuncCompletions[prefix + library] = new vscode.CompletionList();
+								GLua.libraryFuncCompletions[prefix + library] = new vscode.CompletionList(undefined, true);
 								step(funcs["MEMBERS"], GLua.libraryFuncCompletions[prefix + library], prefix + library + ".", false);
 							} else {
 								// Mark this as a package.function() function
@@ -937,7 +947,7 @@ class GLua {
 
 						if ("MEMBERS" in panel_def) {
 							if (!(panel_name in this.libraryFuncCompletions)) {
-								this.libraryFuncCompletions[panel_name] = new vscode.CompletionList();
+								this.libraryFuncCompletions[panel_name] = new vscode.CompletionList(undefined, true);
 							}
 							for (const [panel_func, panel_func_def] of Object.entries(panel_def["MEMBERS"])) {
 								if (typeof panel_func_def !== "object") continue;
@@ -955,7 +965,7 @@ class GLua {
 
 						let contains_a_function = false;
 
-						this.structCompletions[struct_name] = new vscode.CompletionList();
+						this.structCompletions[struct_name] = new vscode.CompletionList(undefined, true);
 						for (const [field_name, field_def] of Object.entries(struct_def["MEMBERS"])) {
 							let is_func = ("TYPE" in field_def && field_def["TYPE"] === "function");
 
@@ -1016,6 +1026,9 @@ class GLua {
 
 		// Create generic completions
 		this.genericCompletions.items = this.globalCompletions.items.concat(this.enumCompletions.items).concat(this.panelCompletions.items);
+
+		// Create generic function completions
+		this.genericFuncCompletions.items = this.globalCompletions.items.concat(this.metaFuncCompletions.items);
 
 		console.log("vscode-glua parsed wiki data successfully");
 	}

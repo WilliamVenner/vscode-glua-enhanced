@@ -1,6 +1,6 @@
 from scrape import *
 from syntax import *
-from language_server import *
+from gluadump import *
 
 import os, os.path
 import json, re
@@ -36,11 +36,6 @@ def write_tmLanguage(syntax):
 	
 	f.close()
 
-def write_language_server_data(language_server_data):
-	f = open("../wiki.json", "w", encoding="utf-8")
-	f.write(json.dumps(language_server_data))
-	f.close()
-
 def main():
 	if not os.path.isdir("scrape"):
 		os.mkdir("scrape")
@@ -55,10 +50,9 @@ def main():
 		wiki_scrape = scrape("--cached" in sys.argv)
 	
 	if wiki_scrape != None:
-		#write_tmLanguage(syntax(wiki_scrape))
-		write_language_server_data(language_server(wiki_scrape))
+		gluadump(wiki_scrape)
 
-		print("Success")
+		#write_tmLanguage(syntax(wiki_scrape))
 		
 		f = open("scrape/scrape.json", "w", encoding="utf-8")
 		f.write(json.dumps(wiki_scrape))
@@ -67,6 +61,8 @@ def main():
 		f = open("../resources/wiki.json", "w", encoding="utf-8")
 		f.write(json.dumps(wiki_scrape))
 		f.close()
+
+		print("Success")
 	else:
 		print("Failed to scrape wiki")
 
