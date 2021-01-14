@@ -17,6 +17,7 @@ Supercharge your Garry's Mod development experience!
 * _Deprecated_, _Internal_, _Reference Only_, _Predicted_ and _New_ flags in documentation
 * Colour palette for `Color()`
 * Notes, Warnings, Bugs, imported from wiki
+* "View Source" auto completions button to look at the GitHub Lua source of literally every Lua-defined function in Garry's Mod
 * Useful snippets
 * File icons for `.lua`, `.vmt`, `.vtf`, `.mdl`, `*.vtx`, `.vvd`, `.phy`
 * `.png` & `.vmt` file previews
@@ -43,10 +44,10 @@ Please [open an issue](https://github.com/WilliamVenner/vscode-glua-enhanced/iss
 
 _\[Placeholder\]_
 
+## gluadump
+
+This extension uses the [gluadump](https://github.com/WilliamVenner/gluadump) addon to extract some information (e.g. debug.getinfo data for the "View Source" buttons) from Garry's Mod and may need to periodically be updated as new features and libraries are added to Garry's Mod.
+
 ## Credits
 
-This package has been forked from a few different repositories.
-
-[language-configuration.json](https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/language-configuration.json) and [package.json](https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/package.json) taken from [SuperiorServers/vscode-glua](https://github.com/SuperiorServers/vscode-glua/)
-
-[lua.tmLanguage](https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/lua.tmLanguage) structure taken from [FPtje/Sublime-GLua-Highlight](https://github.com/FPtje/Sublime-GLua-Highlight/)
+[lua.tmLanguage](https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/syntaxes/lua.tmLanguage) structure taken from [FPtje/Sublime-GLua-Highlight](https://github.com/FPtje/Sublime-GLua-Highlight/)
