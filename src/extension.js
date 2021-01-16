@@ -931,7 +931,7 @@ class GLua {
 						let folderCompletionItem = new vscode.CompletionItem(game + "! " + folder, vscode.CompletionItemKind.Folder);
 						folderCompletionItem.detail = completionItem.detail;
 						folderCompletionItem.DOC_TAG = false;
-						folderCompletionItem.insertText = folder;
+						folderCompletionItem.insertText = folders[j];
 						folderCompletionItem.sortText = game in sound_game_sort ? ("1" + sound_game_sort[game]) : "15";
 
 						if (!(folder in traverseStack)) {
