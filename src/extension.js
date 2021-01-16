@@ -34,7 +34,6 @@ const REGEXP_VGUI_CREATE = /vgui\.Create\((?:["']|\[=*\[)$/;
 // TODO possibly use the wiki scrape data to extract parameters from functions to autocomplete sounds/models/materials
 const REGEXP_LUA_COMPLETIONS = /(?:(?:include|AddCSLuaFile|CompileFile)\s*\(\s*(?:["']|\[=*\[)(?:lua\/)?|lua\/)([^\s]+\/)?/;
 const REGEXP_MATERIAL_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:SetImage|SetMaterial))|Material|surface\.GetTextureID)\s*\(\s*(?:["']|\[=*\[)(?:materials\/)?|materials\/)([^\s]+\/)?/;
-// FILTER const REGEXP_SOUND_COMPLETIONS = /(?:((?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound|))|Sound|SoundDuration|sound\.Play|(sound\.PlayFile)|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/))(?:([A-Za-z0-9_]+?)!)?([^\s]+\/?)?/;
 const REGEXP_SOUND_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound))|Sound|SoundDuration|sound\.Play(?:File)?|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/)([^\s]+\/)?/;
 const REGEXP_MODEL_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:SetModel|SetWeaponModel))|Model|IsUselessModel|ClientsideModel|CreatePhysCollidesFromModel|ents\.FindByModel|NumModelSkins|player_manager\.TranslateToPlayerModelName|util\.(?:PrecacheModel|GetModelInfo|GetModelMeshes|IsModelLoaded|IsValidModel|IsValidProp)|ents\.CreateClientProp)\s*\(\s*(?:["']|\[=*\[)(?:models\/)?|models\/)([^\s]+\/)?/;
 

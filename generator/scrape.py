@@ -101,14 +101,15 @@ class WikiParser:
 			for child in elem_copy:
 				if child.tag == "page":
 					page = child.text_content().strip()
+					link = "/gmod/" + page.replace(" ", "%20")
 					if "text" in child.attrib:
-						link_text = "[" + child.attrib["text"].strip() + "](/gmod/" + page + ")"
+						link_text = "[" + child.attrib["text"].strip() + "](" + link + ")"
 					elif page.startswith("Enums/"):
-						link_text = "[" + page[len("Enums/"):] + "](/gmod/" + page + ")"
+						link_text = "[" + page[len("Enums/"):] + "](" + link + ")"
 					elif page in self.LINKS:
-						link_text = "[" + self.LINKS[page] + "](/gmod/" + page + ")"
+						link_text = "[" + self.LINKS[page] + "](" + link + ")"
 					else:
-						link_text = "[" + page + "](/gmod/" + page + ")"
+						link_text = "[" + page + "](" + link + ")"
 					
 					child.tail = link_text + (child.tail or '')
 
