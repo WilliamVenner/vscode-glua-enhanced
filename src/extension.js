@@ -18,8 +18,8 @@ const LUA_ESCAPE_SEQUENCES = {
 	"'": "'",
 };
 
-const REGEXP_COLOR = /\bColor\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?\s*\)/g;
-const REGEXP_COLOR_REPLACER = /\b(Color\s*\(\s*)(\d+)(\s*,\s*)(\d+)(\s*,\s*)(\d+)(?:(\s*,\s*)(\d+))?(\s*\))/;
+const REGEXP_COLOR = /(?<!\.|:)\b((?:surface\.Set(?:Draw|Text)|render\.(?:SetShadow|Fog)|mesh\.)?Color)(\s*\(\s*)((?<r>\d+)\s*,\s*(?<g>\d+)\s*,\s*(?<b>\d+)(?:\s*,\s*(?<a>\d+))?\s*)\)/g;
+const REGEXP_COLOR_REPLACER = /(\d+)(\s*,\s*)(\d+)(\s*,\s*)(\d+)(?:(\s*,\s*)(\d+))?/;
 const REGEXP_ENUM_COMPLETIONS = /((?:function|local)\s+)?(?<!\.|:)\b([A-Z][A-Z_\.]*)$/;
 const REGEXP_FUNC_COMPLETIONS = /(?<!\B|:|\.)(?:(function)\s+)?([A-Za-z_][A-Za-z0-9_]*)(\.|:)(?:[A-Za-z_][A-Za-z0-9_]*)?$/;
 const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1((?::|\.)(?:[A-Za-z0-9_]*[A-Za-z_])?)?(\s+noitcnuf\s+lacol)?/;
@@ -738,23 +738,28 @@ class GLua {
 	provideColorPresentations(color, ctx) {
 		let result = ctx.document.getText(ctx.range).match(REGEXP_COLOR_REPLACER);
 		let s = "";
-		for (let i = 1; i <= 9; i++) {
-			if (i == 8) {
-				// alpha
-				if (color.alpha != 1) {
-					s += (result[7] == null ? result[3] : result[7]) + (color.alpha * 255).toFixed(0);
-				}
-			} else if (i == 2) {
-				// red
-				s += (color.red * 255).toFixed(0);
-			} else if (i == 4) {
-				// green
-				s += (color.green * 255).toFixed(0);
-			} else if (i == 6) {
-				// blue
-				s += (color.blue * 255).toFixed(0);
-			} else if (i !== 7) {
-				s += result[i];
+		for (let i = 1; i <= 7; i++) {
+			if (result[i] === undefined) continue;
+			switch(i) {
+				case 1:
+					s += (color.red * 255).toFixed(0);
+					break;
+				
+				case 3:
+					s += (color.green * 255).toFixed(0);
+					break;
+
+				case 5:
+					s += (color.blue * 255).toFixed(0);
+					break;
+
+				case 7:
+					if (color.alpha != 1) s += (color.alpha * 255).toFixed(0);
+					break;
+				
+				default:
+					s += result[i];
+					break;
 			}
 		}
 		return [{ label: s }];
@@ -771,17 +776,10 @@ class GLua {
 
 			let result;
 			while ((result = REGEXP_COLOR.exec(line)) !== null) {
-				let components = [];
-				for (let j = 1; j <= 4; j++) {
-					if (result[j] == null) continue;
-					if (components[i] < 0 || components[i] > 255) continue lines;
-					components[j] = Number(result[j]);
-				}
-
-				documentColors.push({
-					color: new vscode.Color(components[1] / 255, components[2] / 255, components[3] / 255, components[4] != null ? (components[4] / 255) : 1),
-					range: new vscode.Range(i, result.index, i, result.index + result[0].length)
-				});
+				documentColors.push(vscode.ColorInformation(
+					new vscode.Range(i, result.index + result[1].length + result[2].length, i, result.index + result[1].length + result[2].length + result[3].length),
+					new vscode.Color(result.groups["r"] / 255, result.groups["g"] / 255, result.groups["b"] / 255, result.groups["a"] != undefined ? (result.groups["a"] / 255) : 1)
+				));
 			}
 		}
 
