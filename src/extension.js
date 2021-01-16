@@ -5,16 +5,29 @@ const escape = require("markdown-escape");
 const WIKI_URL = "https://wiki.facepunch.com/gmod/";
 const GITHUB_URL = "https://github.com/Facepunch/garrysmod/blob/master/garrysmod/";
 
+const LUA_ESCAPE_SEQUENCES = {
+	"a": "\u2407",
+	"b": "[BS]",
+	"f": "\f",
+	"n": "\n",
+	"r": "\r",
+	"t": "\t",
+	"v": "\v",
+	"\\": "\\",
+	"\"" : "\"",
+	"'": "'",
+};
+
 const REGEXP_COLOR = /\bColor\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?\s*\)/g;
 const REGEXP_COLOR_REPLACER = /\b(Color\s*\(\s*)(\d+)(\s*,\s*)(\d+)(\s*,\s*)(\d+)(?:(\s*,\s*)(\d+))?(\s*\))/;
 const REGEXP_ENUM_COMPLETIONS = /((?:function|local)\s+)?(?<!\.|:)\b([A-Z][A-Z_\.]*)$/;
-const REGEXP_FUNC_COMPLETIONS = /\b(?:(function)\s+)?((?:[A-Za-z_][A-Za-z0-9_]*)+?)(\.|:)(?:[A-Za-z_][A-Za-z0-9_]*)?$/;
+const REGEXP_FUNC_COMPLETIONS = /(?<!\B|:|\.)(?:(function)\s+)?([A-Za-z_][A-Za-z0-9_]*)(\.|:)(?:[A-Za-z_][A-Za-z0-9_]*)?$/;
 const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1((?::|\.)(?:[A-Za-z0-9_]*[A-Za-z_])?)?(\s+noitcnuf\s+lacol)?/;
-
 const REGEXP_FUNC_DECL_COMPLETIONS = /(local\s+)?(?:function\s+([A-Za-z_][A-Za-z0-9_]*)?|(funct?i?o?n?))((?::|\.)(?:[A-Za-z_][A-Za-z0-9_]*)?)?$/;
+const REGEXP_INSIDE_LUA_STR = /(?:("|')(?:(?:\\\1|\\\\|.)*?)(\1|$))|(?:\[(=*)\[(?:[\s\S]*?)(\]\3\]|$))/g;
 
 // String completions
-const REGEXP_GAMEMODE_HOOK_COMPLETIONS = /hook\.(Add|Remove|GetTable|Run|Call)\s*\((?:["']|\[=*\[)/;
+const REGEXP_HOOK_COMPLETIONS = /hook\.(Add|Remove|GetTable|Run|Call)\s*\((?:["']|\[=*\[)$/;
 const REGEXP_VGUI_CREATE = /vgui\.Create\((?:["']|\[=*\[)$/;
 
 // File completions
@@ -27,9 +40,12 @@ const REGEXP_MODEL_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:SetModel|SetWeaponModel))|
 
 // ASCII hover
 const REGEXP_ASCII_HOVER = /(?:\\\d+)+/g;
+const REGEXP_LUA_STR = /(?:("|')((?:\\\1|\\\\|.)*?)\1)|(?:\[(=*)\[([\s\S]*?)\]\3\])/g;
+const INVALID_ESCAPE_SEQUENCE_HOVER = new vscode.MarkdownString("`invalid escape sequence`");
 
 // Signature provider
-const REGEXP_SIGNATURE_PROVIDER = /(local\s+)?(?:([A-Za-z_][A-Za-z0-9_]*)(\.|:))?([A-Za-z_][A-Za-z0-9_]*)\((?!,)\s*([^\n\)]+)?\s*\)?/g;
+const REGEXP_SIGNATURE_PROVIDER = /(local\s+)?(?:([A-Za-z_][A-Za-z0-9_]*)(\.|:))?([A-Za-z_][A-Za-z0-9_]*)(?:\((?!,)\s*([^\n\)]+)?\s*\)?|(?:(?:(?:[A-Za-z_][A-Za-z0-9_]*\s*)?{[\s\S]+})|[A-Za-z_][A-Za-z0-9_]*\s*(?:\([\s\S]*\)|(?:("|')(?:(?:\\\6|\\\\|.)*?)\6))))$/;
+const REGEXP_FUNC_ARG_PARSER = /\s*(?:(?:(?:[A-Za-z_][A-Za-z0-9_]*\s*)?{[\s\S]+})|[A-Za-z_][A-Za-z0-9_]*\s*(?:\([\s\S]*\)|(?:("|')(?:(?:\\\1|\\\\|.)*?)\1))|(?:(?:("|')(?:(?:\\\2|\\\\|.)*?)\2)|(?:\[(=*)\[(?:[\s\S]*?)\]\3\]))|(?:[^,]+?))\s*,/g;
 
 class GLua {
 	constructor(extension) {
@@ -46,28 +62,43 @@ class GLua {
 		console.timeEnd("vscode-glua")
 	}
 
-	registerSubscriptions() {
-		// this.extension.subscriptions.push(vscode.languages.registerSignatureHelpProvider("glua", this, "(", ","));
-		this.extension.subscriptions.push(vscode.languages.registerColorProvider("glua", this));
-		this.extension.subscriptions.push(vscode.languages.registerHoverProvider("glua", this));
-
+	registerCompletionProvider(func, allowInStrings, ...triggerCharacters) {
 		let GLua = this;
 		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
 			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideFilePathCompletionItem(GLua, document, pos, cancel, ctx, GLua.getCompletionTerm(document, pos)) }
-		}, "/", "\"", "'", "["));
-		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
-			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideStringCompletionItems(GLua, document, pos, cancel, ctx, GLua.getCompletionTerm(document, pos)) }
-		}, "\"", "'", "["));
-		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
-			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideSpecializedCompletionItems(GLua, document, pos, cancel, ctx, GLua.getCompletionTerm(document, pos)) }
-		}, ".", ":", "("));
-		this.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
-			resolveCompletionItem(item) { return GLua.resolveCompletionItem(item) },
-			provideCompletionItems(document, pos, cancel, ctx) { return GLua.provideGeneralizedCompletionItems(GLua, document, pos, cancel, ctx, GLua.getCompletionTerm(document, pos)) }
-		}));
+			provideCompletionItems(document, pos, cancel, ctx) {
+				let term = GLua.getCompletionTerm(document, pos);
+				if (!allowInStrings && GLua.isTermInsideString(pos, term)) return;
+				return func(GLua, document, pos, cancel, ctx, term);
+			}
+		}, ...triggerCharacters));
+	}
+
+	registerSubscriptions() {
+		this.extension.subscriptions.push(vscode.languages.registerSignatureHelpProvider("glua", this, "(", ","));
+		this.extension.subscriptions.push(vscode.languages.registerColorProvider("glua", this));
+		this.extension.subscriptions.push(vscode.languages.registerHoverProvider("glua", this));
+
+		this.registerCompletionProvider(this.provideFilePathCompletionItem, true, "/", "\"", "'", "[");
+		this.registerCompletionProvider(this.provideStringCompletionItems, true, "\"", "'", "[");
+		this.registerCompletionProvider(this.provideSpecializedCompletionItems, false, ".", ":", "(");
+		this.registerCompletionProvider(this.provideArgumentCompletionItems, false, "(", ",", " ");
+		this.registerCompletionProvider(this.provideGeneralizedCompletionItems, false);
+	}
+
+	getCompletionTerm(document, pos) {
+		return document.lineAt(pos).text.substr(0, pos.character);
+	}
+
+	isTermInsideString(pos, term) {
+		var match;
+		while ((match = REGEXP_INSIDE_LUA_STR.exec(term)) !== null) {
+			let str_range = new vscode.Range(pos.line, match.index, pos.line, match.index + match[0].length);
+			if (str_range.contains(pos)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	getRealmIcon(client, menu, server) {
@@ -77,7 +108,7 @@ class GLua {
 
 		if (!(realm_icon_id in this.realmIcons)) {
 			let full_path = "file:///" + this.extension.asAbsolutePath("resources/icons/realm_" + realm_icon_id + ".svg");
-			this.realmIcons[realm_icon_id] = "![" + [client ? "CLIENT" : null, menu ? "MENU" : null, server ? "SERVER" : null].filter((v) => !!v).join("/") + "](" + this.markdown_url(full_path) + ")";
+			this.realmIcons[realm_icon_id] = "![" + [client ? "CLIENT" : null, menu ? "MENU" : null, server ? "SERVER" : null].filter((v) => !!v).join("/") + "](" + this.markdownURL(full_path) + ")";
 		}
 
 		return this.realmIcons[realm_icon_id];
@@ -88,39 +119,182 @@ class GLua {
 		
 		if (!(label in this.labelIcons)) {
 			let full_path = "file:///" + this.extension.asAbsolutePath("resources/icons/label_" + label + ".svg");
-			this.labelIcons[label] = "![" + label.toUpperCase() + "](" + this.markdown_url(full_path) + ")";
+			this.labelIcons[label] = "![" + label.toUpperCase() + "](" + this.markdownURL(full_path) + ")";
 		}
 
 		return this.labelIcons[label];
 	}
 
-	sanitize_formatting(str) {
+	stripCodeFormatting(str) {
 		return str.replace(/```[\s\S]+?```/g, "_< ommitted code block >_").replace(/^[\t\r ]*/gm, "");
 	}
 
-	markdown_url(url) {
+	markdownURL(url) {
 		return url.replace(/[\[\]]/g, "\\$1").replace(/\\/g, "\\\\").replace(/ /g, "%20");
 	}
 
-	provideSignatureHelp(document, pos, cancel, ctx) {
-		let match;
-		while ((match = REGEXP_SIGNATURE_PROVIDER.exec(document.lineAt(pos).text)) !== null) {
-			if (match[1]) continue;
+	resolveWikiLinks(markdown) {
+		return markdown.replace(/\[(.+?)\]\(\/gmod\/(.+?)\)/g, "[$1](" + WIKI_URL + "$2)");
+	}
 
-			let library_or_meta = match[2];
-			let func_call = match[3];
-			let func_name = match[4];
-			let args = match[5];
+	resolveDocumentation(doc, label, compact) {
+		let markdown = [];
+
+		if ("BASE_DESCRIPTION" in doc) markdown.push(doc["BASE_DESCRIPTION"]);
+		
+		let flags = [];
+		
+		if ("CLIENT" in doc || "MENU" in doc || "SERVER" in doc) flags.push(this.getRealmIcon(doc["CLIENT"], doc["MENU"], doc["SERVER"]));
+		if ("NEW" in doc) flags.push(this.getLabelIcon("new"));
+		if ("DEPRECATED" in doc) flags.push(this.getLabelIcon("deprecated"));
+		if ("INTERNAL" in doc) flags.push(this.getLabelIcon("internal"));
+		if ("REF_ONLY" in doc) flags.push(this.getLabelIcon("reference_only"));
+		if ("PREDICTED" in doc) flags.push(this.getLabelIcon("predicted"));
+		markdown.push(flags.join(" "));
+
+		if (label) markdown.push("**" + escape(label) + "**")
+
+		if (!compact) {
+
+			if ("DESCRIPTION" in doc) markdown.push(doc["DESCRIPTION"]);
+
+			if ("WARNINGS" in doc) doc["WARNINGS"].map((warning) => markdown.push("**⚠️ WARNING:** " + warning));
+
+			if ("BUGS" in doc) doc["BUGS"].map((bug) => markdown.push(
+				("ISSUE" in bug ? (" [🐞 **BUG: #" + bug.ISSUE + "**](https://github.com/facepunch/garrysmod-issues/issues/" + bug.ISSUE + ")") :
+				("PULL" in bug ? (" [🐞 **BUG: PR #" + bug.PULL + "**](https://github.com/facepunch/garrysmod/pull/" + bug.PULL + ")") :
+				"🐞 **BUG:**"))
+			+ ("DESCRIPTION" in bug ? " " + bug.DESCRIPTION : "")));
+
+			if ("NOTES" in doc) doc["NOTES"].map((note) => markdown.push("**📝 NOTE:** " + note));
 			
-			if (func_call === ":") {
-				// Show meta methods + hooks only
-			} else if (func_call === ".") {
-				// Show libraries first, then methods + hooks
-			} else {
-				// Show globals only
-				this.globalCompletions
+		} else if (label) {
+			if (markdown.length > 1) {
+				markdown[markdown.length - 2] = markdown[markdown.length - 2] + " " + markdown[markdown.length - 1];
+				markdown.pop();
 			}
-			console.log(match);
+		}
+
+		let links = [];
+		if ("LINK" in doc) {
+			links.push({ label: "$(notebook) Wiki", link: WIKI_URL + doc["LINK"] });
+			links.push({ label: "$(edit) Edit", link: WIKI_URL + doc["LINK"].replace(/#(.*?)$/, "") + "~edit" });
+		}
+		if ("SRC" in doc) {
+			links.push({ label: "$(source-control) View Source", link: GITHUB_URL + doc["SRC"][0] + "#" + (doc["SRC"][1].split("-").map((line) => "L" + line).join("-")) });
+		}
+		if (links.length > 0) markdown.push(links.map((link) => "[" + escape(link.label) + "](" + link.link + ")").join(" | "));
+
+		return new vscode.MarkdownString(this.resolveWikiLinks(this.stripCodeFormatting(markdown.join("\n\n"))), true);
+	}
+
+	generateSignatureString(args) {
+		let str = "";
+		for (let i = 0; i < args.length; i++) {
+			str += this.generateTypeSignature(args[i]) + ", "
+		}
+		return str.substr(0, str.length - 2);
+	}
+
+	generateTypeSignature(arg) {
+		if (arg["TYPE"] === "vararg") {
+			return "..."
+		} else {
+			return arg["NAME"] + ": " + arg["TYPE"];
+		}
+	}
+
+	pushSignature(activeParameter, signatures, docs) {
+		if (!("ARGUMENTS" in docs)) return;
+		let arg_count = docs["ARGUMENTS"].length;
+		if (activeParameter < arg_count || docs["ARGUMENTS"][arg_count - 1]["TYPE"] === "vararg") {
+			let sigInfo = new vscode.SignatureInformation(this.generateSignatureString(docs["ARGUMENTS"]), this.resolveDocumentation(docs, docs["SEARCH"], true));
+			sigInfo.activeParameter = Math.min(activeParameter, arg_count - 1);
+			for (let i = 0; i < arg_count; i++) {
+				let arg = docs["ARGUMENTS"][i];
+
+				let param = new vscode.ParameterInformation(this.generateTypeSignature(arg), new vscode.MarkdownString(this.resolveWikiLinks(arg["DESCRIPTION"]) + "\n\n---"));
+				if ("ENUM" in arg) param.ENUM = arg["ENUM"];
+
+				sigInfo.parameters.push(param);
+			}
+			signatures.push(sigInfo);
+		}
+	}
+
+	pushSignatures(activeParameter, signatures, docs) {
+		if (Array.isArray(docs)) for (let i = 0; i < docs.length; i++) this.pushSignature(activeParameter, signatures, docs[i]);
+		else this.pushSignature(activeParameter, signatures, docs);
+	}
+
+	provideSignatureHelp(document, pos, cancel, ctx) {
+		let line = document.lineAt(pos);
+		let cursor = line.text.substr(0, pos.character);
+
+		let match = cursor.match(REGEXP_SIGNATURE_PROVIDER);
+		if (!match || match[1]) return;
+
+		let library_or_meta = match[2];
+		let func_call = match[3];
+		let func_name = match[4];
+		var func_args = match[5];
+
+		let activeParameter = 0;
+		var func_args = func_args ? func_args.match(REGEXP_FUNC_ARG_PARSER) : undefined;
+		if (func_args) {
+			let argPos = func_args[0].length + 1;
+			for (let i = 0; i < func_args.length; i++) {
+				if (i === func_args.length - 1) {
+					activeParameter = i + 1;
+				} else {
+					let argRange = new vscode.Range(pos.line, match.index + argPos - 1, pos.line, match.index + argPos + func_args[i].length);
+					if (argRange.contains(pos)) {
+						activeParameter = i;
+						break;
+					}
+					argPos += func_args[i].length;
+				}
+			}
+		}
+
+		let signatures = [];
+
+		while (true) {
+			if (!func_call) {
+				// Show globals only
+				if (func_name in this.signatureProviders.globals) {
+					this.pushSignatures(activeParameter, signatures, this.signatureProviders.globals[func_name]);
+				}
+			} else {
+				if (func_call === ":" && this.hookCompletions[library_or_meta]) {
+					// Show hooks only
+					let full_call = library_or_meta + ":" + func_name;
+					if (full_call in this.signatureProviders.metaFunctions) {
+						this.pushSignatures(activeParameter, signatures, this.signatureProviders.metaFunctions[full_call]);
+					}
+					break;
+				}
+
+				// Show libraries
+				let full_call = library_or_meta + "." + func_name;
+				if (full_call in this.signatureProviders.functions) {
+					this.pushSignatures(activeParameter, signatures, this.signatureProviders.functions[full_call]);
+					break;
+				}
+				
+				// Show meta functions
+				if (func_name in this.signatureProviders.metaFunctions) {
+					this.pushSignatures(activeParameter, signatures, this.signatureProviders.metaFunctions[func_name]);
+					break;
+				}
+			}
+			break;
+		}
+
+		if (signatures.length > 0) {
+			let sigHelp = new vscode.SignatureHelp();
+			sigHelp.signatures = signatures;
+			return sigHelp;
 		}
 	}
 
@@ -132,7 +306,7 @@ class GLua {
 			let doc = this.docs[DOC_TAG];
 
 			if ("RAW_IMAGE" in doc) {
-				item.documentation = new vscode.MarkdownString("![" + escape(item.label) + "](file:///" + this.markdown_url(doc["RAW_IMAGE"]) + ")");
+				item.documentation = new vscode.MarkdownString("![" + escape(item.label) + "](file:///" + this.markdownURL(doc["RAW_IMAGE"]) + ")");
 				return item;
 			}
 
@@ -148,45 +322,7 @@ class GLua {
 				});
 			}
 
-			let markdown = [];
-
-			if ("BASE_DESCRIPTION" in doc) markdown.push(doc["BASE_DESCRIPTION"]);
-			
-			let flags = [];
-			
-			if ("CLIENT" in doc || "MENU" in doc || "SERVER" in doc) flags.push(this.getRealmIcon(doc["CLIENT"], doc["MENU"], doc["SERVER"]));
-			if ("NEW" in doc) flags.push(this.getLabelIcon("new"));
-			if ("DEPRECATED" in doc) flags.push(this.getLabelIcon("deprecated"));
-			if ("INTERNAL" in doc) flags.push(this.getLabelIcon("internal"));
-			if ("REF_ONLY" in doc) flags.push(this.getLabelIcon("reference_only"));
-			if ("PREDICTED" in doc) flags.push(this.getLabelIcon("predicted"));
-			markdown.push(flags.join(" "));
-
-			markdown.push("**" + escape(item.label) + "**")
-
-			if ("DESCRIPTION" in doc) markdown.push(doc["DESCRIPTION"]);
-
-			if ("WARNINGS" in doc) doc["WARNINGS"].map((warning) => markdown.push("**⚠️ WARNING:** " + warning));
-
-			if ("BUGS" in doc) doc["BUGS"].map((bug) => markdown.push(
-				("ISSUE" in bug ? (" [🐞 **BUG: #" + bug.ISSUE + "**](https://github.com/facepunch/garrysmod-issues/issues/" + bug.ISSUE + ")") :
-				("PULL" in bug ? (" [🐞 **BUG: PR #" + bug.PULL + "**](https://github.com/facepunch/garrysmod/pull/" + bug.PULL + ")") :
-				"🐞 **BUG:**"))
-			+ ("DESCRIPTION" in bug ? " " + bug.DESCRIPTION : "")));
-
-			if ("NOTES" in doc) doc["NOTES"].map((note) => markdown.push("**📝 NOTE:** " + note));
-
-			let links = [];
-			if ("LINK" in doc) {
-				links.push({ label: "$(notebook) Wiki", link: WIKI_URL + doc["LINK"] });
-				links.push({ label: "$(edit) Edit", link: WIKI_URL + doc["LINK"].replace(/#(.*?)$/, "") + "~edit" });
-			}
-			if ("SRC" in doc) {
-				links.push({ label: "$(source-control) View Source", link: GITHUB_URL + doc["SRC"][0] + "#" + (doc["SRC"][1].split("-").map((line) => "L" + line).join("-")) });
-			}
-			if (links.length > 0) markdown.push(links.map((link) => "[" + escape(link.label) + "](" + link.link + ")").join(" | "))
-			
-			item.documentation = new vscode.MarkdownString(this.sanitize_formatting(markdown.join("\n\n")), true);
+			item.documentation = this.resolveDocumentation(doc, item.label);
 
 			switch (doc["TAG"]) {
 				case "ENUM":
@@ -200,13 +336,24 @@ class GLua {
 		}
 	}
 
-	// TODO hook.Call should show all hooks, not just gm
+	provideArgumentCompletionItems(GLua, document, pos, cancel, ctx, term) {
+		if (ctx.triggerCharacter === " " && !term.endsWith(", ")) return;
+
+		let sigHelp = GLua.provideSignatureHelp(document, pos, cancel, ctx);
+		if (sigHelp && sigHelp.signatures.length > 0) {
+			let activeSignature = sigHelp.signatures[sigHelp.activeSignature];
+			let activeParam = activeSignature.parameters[activeSignature.activeParameter];
+			if (activeParam && "ENUM" in activeParam && activeParam["ENUM"] in GLua.enumFamilyCompletions) {
+				return GLua.enumFamilyCompletions[activeParam["ENUM"]];
+			}
+		}
+	}
 
 	provideStringCompletionItems(GLua, document, pos, cancel, ctx, term) {
 		let vgui_create = term.match(REGEXP_VGUI_CREATE);
 		if (vgui_create) return GLua.panelCompletions;
 
-		let hook_completions = term.match(REGEXP_GAMEMODE_HOOK_COMPLETIONS);
+		let hook_completions = term.match(REGEXP_HOOK_COMPLETIONS);
 		if (hook_completions) {
 			if (hook_completions[1] == "Call") {
 				return GLua.hookCompletions;
@@ -589,10 +736,8 @@ class GLua {
 		}
 	}
 
-	getCompletionTerm(document, pos) { return document.lineAt(pos).text.substr(0, pos.character); }
-
 	provideColorPresentations(color, ctx) {
-		let result = REGEXP_COLOR_REPLACER.exec(ctx.document.getText(ctx.range));
+		let result = ctx.document.getText(ctx.range).match(REGEXP_COLOR_REPLACER);
 		let s = "";
 		for (let i = 1; i <= 9; i++) {
 			if (i == 8) {
@@ -621,8 +766,12 @@ class GLua {
 
 		lines:
 		for (var i = 0; i < document.lineCount; i++) {
+			let line = document.lineAt(i).text;
+
+			REGEXP_COLOR.lastIndex = 0; // reset match position
+
 			let result;
-			while ((result = REGEXP_COLOR.exec(document.lineAt(i).text)) !== null) {
+			while ((result = REGEXP_COLOR.exec(line)) !== null) {
 				let components = [];
 				for (let j = 1; j <= 4; j++) {
 					if (result[j] == null) continue;
@@ -656,16 +805,47 @@ class GLua {
 				}
 			} catch(e) {}
 		}
+		
+		REGEXP_LUA_STR.lastIndex = 0; // reset match position
+		var match;
+		while ((match = REGEXP_LUA_STR.exec(line.text)) !== null) {
+			if (match[4]) continue; // Can't match multiline strings
+			let str_range = new vscode.Range(line.lineNumber, match.index, line.lineNumber, match.index + match[0].length);
+			if (str_range.contains(pos)) {
+				let valid_str = true;
+				let escaped = match[2].replace(/\\(.)/g, char => {
+					if (char in LUA_ESCAPE_SEQUENCES) {
+						return LUA_ESCAPE_SEQUENCES[char];
+					} else {
+						valid_str = false;
+					}
+				});
+				if (!valid_str) return new vscode.Hover(INVALID_ESCAPE_SEQUENCE_HOVER, str_range);
+
+				let utf8_len = (new TextEncoder()).encode(escaped).length;
+				let cursor_pos = (match[0].length - ((match.index + match[0].length) - pos.character));
+
+				return new vscode.Hover(
+					"Length: " + escaped.length.toLocaleString() + " bytes" +
+					(utf8_len !== escaped.length ? ("\n\nUTF-8: " + utf8_len.toLocaleString() + " characters") : "") +
+					(cursor_pos > 0 && cursor_pos <= escaped.length ? ("\n\nPos: " + cursor_pos) : "")
+				, str_range);
+			}
+		}
 	}
 
 	createCompletionItem(tag, label, kind, item_def, display_label, insert_text) {
 		let completionItem = new vscode.CompletionItem(display_label ? display_label : label, kind);
 
+		completionItem.insertText = insert_text ? insert_text : label;
+		
 		if (display_label) {
-			completionItem.filterText = label; completionItem.sortText = label;
-			if (!insert_text) completionItem.insertText = label;
+			completionItem.filterText = label;
+			completionItem.sortText = label;
+		} else {
+			completionItem.filterText = completionItem.insertText;
+			completionItem.sortText = completionItem.insertText;
 		}
-		if (insert_text) completionItem.insertText = insert_text;
 
 		if (item_def) {
 			if ("DEPRECATED" in item_def) completionItem.tags = [vscode.CompletionItemTag.Deprecated];
@@ -679,6 +859,42 @@ class GLua {
 						throw new Error("Duplicate doc search tag! (" + completionItem.DOC_TAG + ")");
 					}
 					this.docs[completionItem.DOC_TAG] = item_def;
+
+					switch(tag) {
+						case "GLOBAL":
+							this.signatureProviders.globals[item_def["SEARCH"]] = item_def;
+							break;
+
+						case "FUNCTION":
+							this.signatureProviders.functions[item_def["SEARCH"]] = item_def;
+							break;
+					
+						case "HOOK":
+							var sigName = completionItem.label;
+							if (sigName in this.signatureProviders.metaFunctions) {
+								if (!Array.isArray(this.signatureProviders.metaFunctions[sigName])) {
+									this.signatureProviders.metaFunctions[sigName] = [ this.signatureProviders.metaFunctions[sigName] ];
+								}
+								this.signatureProviders.metaFunctions[sigName].push(item_def);
+							} else {
+								this.signatureProviders.metaFunctions[sigName] = item_def;
+							}
+							// do not break
+
+						case "META_FUNCTION":
+							if (tag !== "HOOK" || (completionItem.insertText && completionItem.insertText !== completionItem.label)) {
+								var sigName = completionItem.insertText || completionItem.label;
+								if (sigName in this.signatureProviders.metaFunctions) {
+									if (!Array.isArray(this.signatureProviders.metaFunctions[sigName])) {
+										this.signatureProviders.metaFunctions[sigName] = [ this.signatureProviders.metaFunctions[sigName] ];
+									}
+									this.signatureProviders.metaFunctions[sigName].push(item_def);
+								} else {
+									this.signatureProviders.metaFunctions[sigName] = item_def;
+								}
+							}
+							break;
+					}
 				}
 			}
 		}
@@ -832,22 +1048,30 @@ class GLua {
 
 		this.wiki = require("../resources/wiki.json");
 		this.docs = {};
+
 		this.genericCompletions = new vscode.CompletionList(undefined, true);      // contains enums, globals, libraries, panels
 		this.genericFuncCompletions = new vscode.CompletionList(undefined, true);  // contains globals + meta functions
-		this.enumCompletions = new vscode.CompletionList(undefined, true);         // enums only
+		this.enumCompletions = new vscode.CompletionList(undefined, true);         // enums only (also include structs because they're uppercase)
 		this.globalCompletions = new vscode.CompletionList(undefined, true);       // globals only
 		this.panelCompletions = new vscode.CompletionList(undefined, true);        // panels only
 		this.functionDeclCompletions = new vscode.CompletionList(undefined, true); // Structs and hook families only
 		this.metaFuncCompletions = new vscode.CompletionList(undefined, true);     // meta:Functions() only, but also include hooks here
-		this.hookCompletions = new vscode.CompletionList(undefined, true);         // hooks only
+		this.hookCompletions = new vscode.CompletionList();                        // hooks only
+		this.enumFamilyCompletions = {}                                            // enum autocompletion during function signature
 		this.libraryFuncCompletions = {};                                          // library.functions() only
 		this.structCompletions = {};                                               // STRUCT and STRUCT.VAR = VAL only
+
+		this.signatureProviders = {
+			globals: {},
+			functions: {},
+			metaFunctions: {}
+		};
 
 		for (const [key, entries] of Object.entries(this.wiki)) {
 			switch (key) {
 				case "HOOKS":
 					for (const [hook_family, hook_family_def] of Object.entries(entries)) {
-						this.hookCompletions[hook_family] = new vscode.CompletionList(undefined, true);
+						this.hookCompletions[hook_family] = new vscode.CompletionList();
 
 						let add_to_meta = hook_family != "GM" && hook_family != "GAMEMODE";
 						if (add_to_meta && !(hook_family in this.metaFuncCompletions)) this.metaFuncCompletions[hook_family] = {};
@@ -903,7 +1127,7 @@ class GLua {
 								if (!is_package && !("DESCRIPTION" in funcs)) completionItem.DOC_TAG = false;
 								(!completions.items ? GLua.globalCompletions : completions).items.push(completionItem);
 
-								GLua.libraryFuncCompletions[prefix + library] = new vscode.CompletionList(undefined, true);
+								GLua.libraryFuncCompletions[prefix + library] = new vscode.CompletionList();
 								step(funcs["MEMBERS"], GLua.libraryFuncCompletions[prefix + library], prefix + library + ".", false);
 							} else {
 								// Mark this as a package.function() function
@@ -947,7 +1171,7 @@ class GLua {
 
 						if ("MEMBERS" in panel_def) {
 							if (!(panel_name in this.libraryFuncCompletions)) {
-								this.libraryFuncCompletions[panel_name] = new vscode.CompletionList(undefined, true);
+								this.libraryFuncCompletions[panel_name] = new vscode.CompletionList();
 							}
 							for (const [panel_func, panel_func_def] of Object.entries(panel_def["MEMBERS"])) {
 								if (typeof panel_func_def !== "object") continue;
@@ -990,6 +1214,8 @@ class GLua {
 								struct_name + ":",
 								"function " + struct_name
 							));
+
+							this.enumCompletions.items.push(completionItem);
 						}
 					}
 					break;
@@ -1004,14 +1230,23 @@ class GLua {
 					break;
 
 				case "ENUMS":
-					for (const [enum_name, enum_def] of Object.entries(entries)) this.enumCompletions.items.push(this.createCompletionItem(
-						"ENUM",
-						enum_name,
-						vscode.CompletionItemKind.Enum,
-						enum_def,
-						undefined,
-						("REF_ONLY" in enum_def ? ("VALUE" in enum_def ? enum_def["VALUE"] : undefined) : undefined)
-					));
+					for (const [enum_name, enum_def] of Object.entries(entries)) {
+						if (!(enum_def["FAMILY"] in this.enumFamilyCompletions)) {
+							this.enumFamilyCompletions[enum_def["FAMILY"]] = new vscode.CompletionList();
+						}
+
+						let completionItem = this.createCompletionItem(
+							"ENUM",
+							enum_name,
+							vscode.CompletionItemKind.Enum,
+							enum_def,
+							enum_name,
+							("REF_ONLY" in enum_def ? ("VALUE" in enum_def ? enum_def["VALUE"] : undefined) : undefined)
+						);
+
+						this.enumCompletions.items.push(completionItem);
+						this.enumFamilyCompletions[enum_def["FAMILY"]].items.push(completionItem);
+					}
 					break;
 			}
 		}

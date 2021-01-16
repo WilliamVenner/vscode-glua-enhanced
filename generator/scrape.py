@@ -94,24 +94,22 @@ class WikiParser:
 	def compress_newlines(self, text):
 		return re.sub(self.REGEX_COMPRESS_NEWLINES, "\n\n", text).strip()
 
-	def lazy_resolve_wiki_link(self, text):
-		if text in self.LINKS:
-			return self.LINKS[text]
-		else:
-			return text
-
-	REGEX_EXTERNAL_LINK = re.compile(r"\[([^\[]+)\]\(.*\)", re.MULTILINE)
-	# TODO remove and replace with simple markdown links that go to the wiki page
 	def interpolate_wiki_links(self, elem):
 		if len(elem) > 0:
 			elem_copy = copy.deepcopy(elem)
 
 			for child in elem_copy:
 				if child.tag == "page":
+					page = child.text_content().strip()
 					if "text" in child.attrib:
-						link_text = child.attrib["text"].strip()
+						link_text = "[" + child.attrib["text"].strip() + "](/gmod/" + page + ")"
+					elif page.startswith("Enums/"):
+						link_text = "[" + page[len("Enums/"):] + "](/gmod/" + page + ")"
+					elif page in self.LINKS:
+						link_text = "[" + self.LINKS[page] + "](/gmod/" + page + ")"
 					else:
-						link_text = self.lazy_resolve_wiki_link(self.interpolate_wiki_links(child))
+						link_text = "[" + page + "](/gmod/" + page + ")"
+					
 					child.tail = link_text + (child.tail or '')
 
 			strip_elements(elem_copy, "*", with_tail=False)
@@ -208,6 +206,7 @@ class WikiParser:
 		description_elem = CSSSelector("function > description")(item)
 		if len(description_elem) > 0: self.add_item_content_def(description_elem[0], item_def)
 
+		find_enum_links = CSSSelector(":scope > page")
 		for arg in CSSSelector("function > args > arg")(item):
 			if "ARGUMENTS" not in item_def:
 				item_def["ARGUMENTS"] = []
@@ -217,6 +216,12 @@ class WikiParser:
 				arg_def["NAME"] = arg.attrib["name"]
 			if "type" in arg.attrib and len(arg.attrib["type"]) > 0:
 				arg_def["TYPE"] = arg.attrib["type"]
+
+				if arg_def["TYPE"] == "number":
+					for page in find_enum_links(arg):
+						link = page.text_content().strip()
+						if link.startswith("Enums/"):
+							arg_def["ENUM"] = link[len("Enums/"):]
 			
 			self.add_item_content_def(arg, arg_def)
 			
@@ -328,7 +333,7 @@ class WikiParser:
 
 	## Parsing Sidebar ##
 
-	def parse_generic_category(self, key, category_list, force_non_deprecated=False):
+	def parse_globals(self, key, category_list, force_non_deprecated=False):
 		for child in list(category_list):
 			name = child.attrib["search"]
 
@@ -361,7 +366,7 @@ class WikiParser:
 			subcategory_def["MEMBERS"] = {}
 			subcategory_def["SEARCH"] = name
 			self.add_class_defs(subcategory_def, child.classes, force_non_deprecated=True)
-			self.add_wiki_link(subcategory_def, child, name)
+			# self.add_wiki_link(subcategory_def, child, name)
 			parsed[name] = subcategory_def
 
 			link = CSSSelector(":scope > summary > a.cm")(child)
@@ -390,7 +395,7 @@ class WikiParser:
 				member_def["SEARCH"] = category_item.attrib["search"]
 				if deprecated: member_def["DEPRECATED"] = True
 				self.add_class_defs(member_def, category_item.classes, force_non_deprecated=True)
-				self.add_wiki_link(member_def, category_item, item_name)
+				# self.add_wiki_link(member_def, category_item, item_name)
 				parent_def["MEMBERS"][item_name] = member_def
 
 				self.queue_page_parse(self.parse_function, category_item.attrib["href"], member_def)
@@ -400,7 +405,7 @@ class WikiParser:
 				subcategory_def = {}
 				subcategory_def["MEMBERS"] = {}
 				self.add_class_defs(subcategory_def, item.classes, force_non_deprecated=True)
-				self.add_wiki_link(subcategory_def, item, item_name)
+				# self.add_wiki_link(subcategory_def, item, item_name)
 				parent_def["MEMBERS"][item_name] = subcategory_def
 
 				deprecated = deprecated or "depr" in item.classes
@@ -449,7 +454,7 @@ class WikiParser:
 			hook_def = {}
 			hook_def["SEARCH"] = parent + ":" + member
 			self.add_class_defs(hook_def, hook.classes)
-			self.add_wiki_link(hook_def, hook, hook_def["SEARCH"])
+			# self.add_wiki_link(hook_def, hook, hook_def["SEARCH"])
 			self.PARSED["HOOKS"][parent]["MEMBERS"][member] = hook_def
 
 			self.queue_page_parse(self.parse_hook, hook.attrib["href"], hook_def)
@@ -458,6 +463,7 @@ class WikiParser:
 		for enum in CSSSelector("a.cm.enum")(self.TREE):
 			enum_def = {}
 			enum_def["LINK"] = enum.attrib["href"].removeprefix("/gmod/")
+			enum_def["FAMILY"] = enum.attrib["search"]
 
 			self.add_class_defs(enum_def, enum.classes, force_non_deprecated=True)
 			self.queue_page_parse(self.parse_enum, enum.attrib["href"], enum_def)
@@ -472,7 +478,7 @@ class WikiParser:
 			name = div.text_content().strip()
 			
 			if name == "Globals":
-				self.parse_generic_category("GLOBALS", sel_category_list(category))
+				self.parse_globals("GLOBALS", sel_category_list(category))
 			elif name == "Structs":
 				self.parse_struct_category(sel_category_list(category))
 			elif name == "Panels":
@@ -484,6 +490,20 @@ class WikiParser:
 		
 		# Process queue
 		self.process_page_parse_queue()
+
+		# Remove empty stuff
+		def strip_empty_keys(member, id_base=""):
+			for key in list(member):
+				if len(key) == 0:
+					print("Stripped \"" + id_base + key + "\" (empty key)")
+					if ("LINK" in member[key]):
+						print(WIKI_URL + "/gmod/" + member[key]["LINK"])
+					del member[key]
+				elif "members" in member[key]:
+					strip_empty_keys(member[key]["members"], id_base + key + ".")
+			
+		for category, items in self.PARSED.items():
+			strip_empty_keys(items)
 
 def scrape(cached = False):
 	return WikiParser(cached).PARSED

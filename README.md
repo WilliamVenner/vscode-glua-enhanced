@@ -14,17 +14,28 @@ Supercharge your Garry's Mod development experience!
 
 * Auto completion & wiki integration for almost everything in Garry's Mod
 * Client/Server/Menu flags
-* _Deprecated_, _Internal_, _Reference Only_, _Predicted_ and _New_ flags in documentation
+* ![](https://i.imgur.com/2SlS4Gc.png) flags
 * Colour palette for `Color()`
 * Notes, Warnings, Bugs, imported from wiki
-* "View Source" auto completions button to look at the GitHub Lua source of literally every Lua-defined function in Garry's Mod
-* Useful snippets
+* Function argument names, types and descriptions shown as you type
+* Function enum arguments autocompletion
 * File icons for `.lua`, `.vmt`, `.vtf`, `.mdl`, `*.vtx`, `.vvd`, `.phy`
 * `.png` & `.vmt` file previews
 * Workspace `models/`, `materials/`, `sound/` and `lua/` autocompletion file browser
 * Default `sound/` autocompletion file browser
 * Default `materials/flags16/` autocompletion file browser
 * Default `materials/icon16/` autocompletion file browser
+* "View Source" auto completions button to look at the GitHub Lua source of literally every Lua-defined function in Garry's Mod
+
+## Common Issues
+
+#### _Auto completion documentation isn't showing up!_
+
+Press `CTRL + Space`
+
+## Bugs/Feature Requests
+
+Please [open an issue](https://github.com/WilliamVenner/vscode-glua-enhanced/issues) to report bugs and suggest features.
 
 ## Recommended Companion Extensions
 
@@ -35,10 +46,6 @@ Mixes textual autocompletions and extension-provided autocompletions, and also i
 ## Media
 
 soon™
-
-## Bugs/Feature Requests
-
-Please [open an issue](https://github.com/WilliamVenner/vscode-glua-enhanced/issues) to report bugs and suggest features.
 
 ## Wiki Integration
 
