@@ -55,11 +55,11 @@ class WikiParser:
 	}
 
 	LINKS: dict = {}
-	def add_wiki_link(self, obj, elem, name):
+	def add_wiki_link(self, obj, elem, name, interpolate=False):
 		if "href" in elem.attrib:
 			link = elem.attrib["href"].removeprefix("/gmod/")
 			obj["LINK"] = link
-			self.LINKS[link] = name
+			if interpolate: self.LINKS[link] = name
 
 	CLASS_DEFS: dict = {
 		"depr": "DEPRECATED",
@@ -340,7 +340,7 @@ class WikiParser:
 			generic_def = {}
 			generic_def["SEARCH"] = name
 			self.add_class_defs(generic_def, child.classes, force_non_deprecated)
-			self.add_wiki_link(generic_def, child, name)
+			self.add_wiki_link(generic_def, child, name, True)
 			self.PARSED[key][name] = generic_def
 			
 			self.queue_page_parse(self.parse_function, child.attrib["href"], generic_def)
@@ -353,7 +353,7 @@ class WikiParser:
 			struct_def["MEMBERS"] = {}
 			struct_def["SEARCH"] = name
 			self.add_class_defs(struct_def, child.classes, force_non_deprecated=True)
-			self.add_wiki_link(struct_def, child, name)
+			self.add_wiki_link(struct_def, child, name, True)
 			self.PARSED["STRUCTS"][name] = struct_def
 
 			self.queue_page_parse(self.parse_struct, name, child.attrib["href"], struct_def)
@@ -366,7 +366,7 @@ class WikiParser:
 			subcategory_def["MEMBERS"] = {}
 			subcategory_def["SEARCH"] = name
 			self.add_class_defs(subcategory_def, child.classes, force_non_deprecated=True)
-			# self.add_wiki_link(subcategory_def, child, name)
+			self.add_wiki_link(subcategory_def, child, name)
 			parsed[name] = subcategory_def
 
 			link = CSSSelector(":scope > summary > a.cm")(child)
@@ -395,7 +395,7 @@ class WikiParser:
 				member_def["SEARCH"] = category_item.attrib["search"]
 				if deprecated: member_def["DEPRECATED"] = True
 				self.add_class_defs(member_def, category_item.classes, force_non_deprecated=True)
-				# self.add_wiki_link(member_def, category_item, item_name)
+				self.add_wiki_link(member_def, category_item, item_name)
 				parent_def["MEMBERS"][item_name] = member_def
 
 				self.queue_page_parse(self.parse_function, category_item.attrib["href"], member_def)
@@ -405,7 +405,7 @@ class WikiParser:
 				subcategory_def = {}
 				subcategory_def["MEMBERS"] = {}
 				self.add_class_defs(subcategory_def, item.classes, force_non_deprecated=True)
-				# self.add_wiki_link(subcategory_def, item, item_name)
+				self.add_wiki_link(subcategory_def, item, item_name)
 				parent_def["MEMBERS"][item_name] = subcategory_def
 
 				deprecated = deprecated or "depr" in item.classes
@@ -454,7 +454,7 @@ class WikiParser:
 			hook_def = {}
 			hook_def["SEARCH"] = parent + ":" + member
 			self.add_class_defs(hook_def, hook.classes)
-			# self.add_wiki_link(hook_def, hook, hook_def["SEARCH"])
+			self.add_wiki_link(hook_def, hook, hook_def["SEARCH"])
 			self.PARSED["HOOKS"][parent]["MEMBERS"][member] = hook_def
 
 			self.queue_page_parse(self.parse_hook, hook.attrib["href"], hook_def)
