@@ -1,22 +1,10 @@
 const vscode = require("vscode");
 const fs = require("fs");
 const escape = require("markdown-escape");
+const { Tokenizer, LUA_ESCAPE_SEQUENCES } = require("./tokenizer");
 
 const WIKI_URL = "https://wiki.facepunch.com/gmod/";
 const GITHUB_URL = "https://github.com/Facepunch/garrysmod/blob/master/garrysmod/";
-
-const LUA_ESCAPE_SEQUENCES = {
-	"a": "\u2407",
-	"b": "[BS]",
-	"f": "\f",
-	"n": "\n",
-	"r": "\r",
-	"t": "\t",
-	"v": "\v",
-	"\\": "\\",
-	"\"" : "\"",
-	"'": "'",
-};
 
 const REGEXP_COLOR = /(?<!\.|:)\b((?:surface\.Set(?:Draw|Text)|render\.(?:SetShadow|Fog)|mesh\.)?Color)(\s*\(\s*)((?<r>\d+)\s*,\s*(?<g>\d+)\s*,\s*(?<b>\d+)(?:\s*,\s*(?<a>\d+))?\s*)\)/g;
 const REGEXP_COLOR_REPLACER = /(\d+)(\s*,\s*)(\d+)(\s*,\s*)(\d+)(?:(\s*,\s*)(\d+))?/;
@@ -43,8 +31,7 @@ const REGEXP_LUA_STR = /(?:("|')((?:\\\1|\\\\|.)*?)\1)|(?:\[(=*)\[([\s\S]*?)\]\3
 const INVALID_ESCAPE_SEQUENCE_HOVER = new vscode.MarkdownString("`invalid escape sequence`");
 
 // Signature provider
-const REGEXP_SIGNATURE_PROVIDER = /(local\s+)?(?:([A-Za-z_][A-Za-z0-9_]*)(\.|:))?([A-Za-z_][A-Za-z0-9_]*)(?:\((?!,)\s*([^\n\)]+)?\s*\)?|(?:(?:(?:[A-Za-z_][A-Za-z0-9_]*\s*)?{[\s\S]+})|[A-Za-z_][A-Za-z0-9_]*\s*(?:\([\s\S]*\)|(?:("|')(?:(?:\\\6|\\\\|.)*?)\6))))$/;
-const REGEXP_FUNC_ARG_PARSER = /\s*(?:(?:(?:[A-Za-z_][A-Za-z0-9_]*\s*)?{[\s\S]+})|[A-Za-z_][A-Za-z0-9_]*\s*(?:\([\s\S]*\)|(?:("|')(?:(?:\\\1|\\\\|.)*?)\1))|(?:(?:("|')(?:(?:\\\2|\\\\|.)*?)\2)|(?:\[(=*)\[(?:[\s\S]*?)\]\3\]))|(?:[^,]+?))\s*,/g;
+const REGEXP_FUNC_CALL_TYPE = /^(.+)(:|\.)(.+?)$/;
 
 class GLua {
 	constructor(extension) {
@@ -149,15 +136,13 @@ class GLua {
 		if ("INTERNAL" in doc) flags.push(this.getLabelIcon("internal"));
 		if ("REF_ONLY" in doc) flags.push(this.getLabelIcon("reference_only"));
 		if ("PREDICTED" in doc) flags.push(this.getLabelIcon("predicted"));
-		markdown.push(flags.join(" "));
+		if (flags.length > 0) markdown.push(flags.join(" "));
 
 		if (label) markdown.push("**" + escape(label) + "**")
 
 		if (!compact) {
 
 			if ("DESCRIPTION" in doc) markdown.push(doc["DESCRIPTION"]);
-
-			if ("WARNINGS" in doc) doc["WARNINGS"].map((warning) => markdown.push("**⚠️ WARNING:** " + warning));
 
 			if ("BUGS" in doc) doc["BUGS"].map((bug) => markdown.push(
 				("ISSUE" in bug ? (" [🐞 **BUG: #" + bug.ISSUE + "**](https://github.com/facepunch/garrysmod-issues/issues/" + bug.ISSUE + ")") :
@@ -169,10 +154,12 @@ class GLua {
 			
 		} else if (label) {
 			if (markdown.length > 1) {
-				markdown[markdown.length - 2] = markdown[markdown.length - 2] + " " + markdown[markdown.length - 1];
-				markdown.pop();
+				markdown[0] = markdown[0] + " " + markdown[1];
+				markdown.splice(1, 1);
 			}
 		}
+
+		if ("WARNINGS" in doc) doc["WARNINGS"].map((warning) => markdown.push("**⚠️ WARNING:** " + warning));
 
 		let links = [];
 		if ("LINK" in doc) {
@@ -203,87 +190,110 @@ class GLua {
 		}
 	}
 
-	pushSignature(activeParameter, signatures, docs) {
-		if (!("ARGUMENTS" in docs)) return;
-		let arg_count = docs["ARGUMENTS"].length;
-		if (activeParameter < arg_count || docs["ARGUMENTS"][arg_count - 1]["TYPE"] === "vararg") {
-			let sigInfo = new vscode.SignatureInformation(this.generateSignatureString(docs["ARGUMENTS"]), this.resolveDocumentation(docs, docs["SEARCH"], true));
-			sigInfo.activeParameter = Math.min(activeParameter, arg_count - 1);
-			for (let i = 0; i < arg_count; i++) {
-				let arg = docs["ARGUMENTS"][i];
+	pushSignature(activeParameter, signatures, docs, callback, activeCallbackParameter, callbackDocumentation) {
+		let docArguments = "ARGUMENTS" in docs ? "ARGUMENTS" : ("CALLBACK" in docs ? "CALLBACK" : undefined);
+		if (!docArguments) return;
+		docArguments = docs[docArguments];
 
-				let param = new vscode.ParameterInformation(this.generateTypeSignature(arg), new vscode.MarkdownString(this.resolveWikiLinks(arg["DESCRIPTION"]) + "\n\n---"));
+		let arg_count = docArguments.length;
+		let arg_pos = Math.min(activeParameter, arg_count-1);
+		if (
+			(activeParameter < arg_count || docArguments[arg_count - 1]["TYPE"] === "vararg") &&
+			(!callback || !("CALLBACK" in docArguments[arg_pos]) || (docArguments[arg_pos]["TYPE"] === "function"))
+		) {
+			let sigInfo = new vscode.SignatureInformation(this.generateSignatureString(docArguments), callbackDocumentation ? callbackDocumentation : ("SEARCH" in docs ? this.resolveDocumentation(docs, docs["SEARCH"], true) : undefined));
+			sigInfo.activeParameter = arg_pos;
+			for (let i = 0; i < arg_count; i++) {
+				let arg = docArguments[i];
+				
+				let param = new vscode.ParameterInformation(this.generateTypeSignature(arg), "DESCRIPTION" in arg ? this.resolveDocumentation(arg).appendMarkdown(sigInfo.documentation ? "\n\n---" : "") : undefined);
 				if ("ENUM" in arg) param.ENUM = arg["ENUM"];
+
+				if (callback && arg_pos === i && "CALLBACK" in arg) {
+					let paramSignatures = [];
+					this.pushSignature(activeCallbackParameter, paramSignatures, arg, undefined, undefined, sigInfo.documentation);
+
+					param.CALLBACK_SIGNATURES = new vscode.SignatureHelp();
+					param.CALLBACK_SIGNATURES.signatures = paramSignatures;
+				}
 
 				sigInfo.parameters.push(param);
 			}
+
 			signatures.push(sigInfo);
 		}
 	}
 
-	pushSignatures(activeParameter, signatures, docs) {
-		if (Array.isArray(docs)) for (let i = 0; i < docs.length; i++) this.pushSignature(activeParameter, signatures, docs[i]);
-		else this.pushSignature(activeParameter, signatures, docs);
+	pushSignatures(activeParameter, signatures, docs, callback, activeCallbackParameter) {
+		if (Array.isArray(docs)) for (let i = 0; i < docs.length; i++) this.pushSignature(activeParameter, signatures, docs[i], callback, activeCallbackParameter, undefined);
+		else this.pushSignature(activeParameter, signatures, docs, callback, activeCallbackParameter, undefined);
 	}
 
 	provideSignatureHelp(document, pos, cancel, ctx) {
 		let line = document.lineAt(pos);
 		let cursor = line.text.substr(0, pos.character);
+		
+		let tokenized = new Tokenizer(cursor);
+		if (tokenized.invalidLua || tokenized.openParanthesis.length === 0) return;
 
-		let match = cursor.match(REGEXP_SIGNATURE_PROVIDER);
-		if (!match || match[1]) return;
+		let func = tokenized.openParanthesis[tokenized.openParanthesis.length-1];
+		if (func === false) return;
 
-		let library_or_meta = match[2];
-		let func_call = match[3];
-		let func_name = match[4];
-		var func_args = match[5];
-
-		let activeParameter = 0;
-		var func_args = func_args ? func_args.match(REGEXP_FUNC_ARG_PARSER) : undefined;
-		if (func_args) {
-			let argPos = func_args[0].length + 1;
-			for (let i = 0; i < func_args.length; i++) {
-				if (i === func_args.length - 1) {
-					activeParameter = i + 1;
-				} else {
-					let argRange = new vscode.Range(pos.line, match.index + argPos - 1, pos.line, match.index + argPos + func_args[i].length);
-					if (argRange.contains(pos)) {
-						activeParameter = i;
-						break;
-					}
-					argPos += func_args[i].length;
-				}
+		let activeCallbackParameter;
+		let callback = false;
+		if (tokenized.openParanthesis.length > 1) {
+			// Detect a callback function
+			if (func[0] === "function") {
+				callback = true;
+				activeCallbackParameter = func.length - 1;
+				func = tokenized.openParanthesis[tokenized.openParanthesis.length-2];
 			}
 		}
+
+		let activeParameter = func.length - 1;
+		let func_parse = func[0].match(REGEXP_FUNC_CALL_TYPE);
 
 		let signatures = [];
 
 		while (true) {
-			if (!func_call) {
+			if (!func_parse) {
+				let func_name = func[0];
+
 				// Show globals only
 				if (func_name in this.signatureProviders.globals) {
-					this.pushSignatures(activeParameter, signatures, this.signatureProviders.globals[func_name]);
+					this.pushSignatures(activeParameter, signatures, this.signatureProviders.globals[func_name], callback, activeCallbackParameter);
 				}
 			} else {
+				let full_call = func_parse[0];
+				let library_or_meta = func_parse[1];
+				let func_call = func_parse[2];
+				let meta_func = func_parse[3];
+
 				if (func_call === ":" && this.hookCompletions[library_or_meta]) {
 					// Show hooks only
-					let full_call = library_or_meta + ":" + func_name;
 					if (full_call in this.signatureProviders.metaFunctions) {
-						this.pushSignatures(activeParameter, signatures, this.signatureProviders.metaFunctions[full_call]);
+						this.pushSignatures(activeParameter, signatures, this.signatureProviders.metaFunctions[full_call], callback, activeCallbackParameter);
 					}
 					break;
 				}
 
 				// Show libraries
-				let full_call = library_or_meta + "." + func_name;
 				if (full_call in this.signatureProviders.functions) {
-					this.pushSignatures(activeParameter, signatures, this.signatureProviders.functions[full_call]);
+					if (callback && full_call == "hook.Add") {
+						let hookDocTag = "GM:" + func[1];
+						if (hookDocTag in this.signatureProviders.metaFunctions) {
+							this.pushSignatures(activeCallbackParameter, signatures, this.signatureProviders.metaFunctions[hookDocTag]);
+							break;
+						}
+					}
+					
+					this.pushSignatures(activeParameter, signatures, this.signatureProviders.functions[full_call], callback, activeCallbackParameter);
 					break;
 				}
 				
 				// Show meta functions
-				if (func_name in this.signatureProviders.metaFunctions) {
-					this.pushSignatures(activeParameter, signatures, this.signatureProviders.metaFunctions[func_name]);
+				if (meta_func in this.signatureProviders.metaFunctions) {
+					this.pushSignatures(activeParameter, signatures, this.signatureProviders.metaFunctions[meta_func], callback, activeCallbackParameter);
 					break;
 				}
 			}
@@ -291,6 +301,13 @@ class GLua {
 		}
 
 		if (signatures.length > 0) {
+			if (callback) {
+				let activeParam = signatures[0].parameters[activeCallbackParameter];
+				if ("CALLBACK_SIGNATURES" in activeParam) {
+					return activeParam.CALLBACK_SIGNATURES;
+				}
+			}
+
 			let sigHelp = new vscode.SignatureHelp();
 			sigHelp.signatures = signatures;
 			return sigHelp;
@@ -798,7 +815,7 @@ class GLua {
 				let ascii_range = new vscode.Range(line.lineNumber, match.index, line.lineNumber, match.index + match[0].length);
 				if (ascii_range.contains(pos)) {
 					let bytes = String.fromCharCode(...match[0].split("\\"));
-					return new vscode.Hover(new vscode.MarkdownString("```lua\n" + bytes + "\n```"), ascii_range);
+					return new vscode.Hover(new vscode.MarkdownString().appendCodeblock(bytes, "glua"), ascii_range);
 				}
 			} catch(e) {}
 		}

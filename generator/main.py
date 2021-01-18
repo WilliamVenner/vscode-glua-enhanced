@@ -1,6 +1,6 @@
-from scrape import *
-from syntax import *
-from gluadump import *
+from scrape import scrape
+# from syntax import syntax
+from gluadump import gluadump
 
 import os, os.path
 import json, re
@@ -47,7 +47,7 @@ def main():
 		f.close()
 	else:
 		print("Scraping wiki...")
-		wiki_scrape = scrape("--cached" in sys.argv)
+		wiki_scrape = scrape("--cached" in sys.argv, "--quiet" in sys.argv)
 	
 	if wiki_scrape != None:
 		gluadump(wiki_scrape)

@@ -16,12 +16,12 @@ from lxml.cssselect import CSSSelector
 import urllib3
 http = urllib3.PoolManager()
 
-def request(url, cached=False, cache_extension="html"):
+def request(url, cached=False, cache_extension="html", quiet=False):
 	url_md5 = hashlib.md5(url.encode()).hexdigest()
 	cached_path = "scrape/" + url_md5 + "." + cache_extension
 
 	if cached and os.path.exists(cached_path):
-		print("GET [scrape/{hash}.{extension}] {url}".format(hash = url_md5, url = url, extension=cache_extension))
+		if not quiet: print("GET [scrape/{hash}.{extension}] {url}".format(hash = url_md5, url = url, extension=cache_extension))
 
 		f = open(cached_path, "r", encoding="utf-8")
 		cached_response = f.read()
@@ -29,7 +29,7 @@ def request(url, cached=False, cache_extension="html"):
 
 		return cached_response
 
-	print("GET " + url)
+	if not quiet: print("GET " + url)
 
 	response = http.request("GET", url)
 	if response.status >= 200 and response.status < 300:
@@ -124,7 +124,7 @@ class WikiParser:
 			return text
 
 	def get_wiki_page_markup(self, url):
-		body = request(WIKI_URL + url.removeprefix(WIKI_URL) + "?format=text", self.USE_CACHE, "xml")
+		body = request(WIKI_URL + url.removeprefix(WIKI_URL) + "?format=text", self.USE_CACHE, "xml", self.QUIET)
 		return html.fromstring(body)
 
 	# TODO parse <added>YYYY.MM.DD</added>
@@ -135,14 +135,17 @@ class WikiParser:
 			if "line" in src.attrib:
 				item_def["SRC"] = [src.text_content(), src.attrib["line"].replace("L", "")]
 
-	def parse_text_content(self, item, item_def):
+	def parse_text_content(self, item, item_def=False):
 		description = self.interpolate_wiki_links(item)
 		if description:
 			description = self.compress_newlines(description)
-			if "DESCRIPTION" in item_def:
-				item_def["DESCRIPTION"] = item_def["DESCRIPTION"] + "\n\n" + description
+			if item_def == False:
+				return description
 			else:
-				item_def["DESCRIPTION"] = description
+				if "DESCRIPTION" in item_def:
+					item_def["DESCRIPTION"] = item_def["DESCRIPTION"] + "\n\n" + description
+				else:
+					item_def["DESCRIPTION"] = description
 	
 	def add_item_content_def(self, item, item_def):
 		self.parse_text_content(item, item_def)
@@ -176,25 +179,27 @@ class WikiParser:
 			item_def["BUGS"].append(bug_def)
 
 		for note in sel_notes(item):
-			note_content = note.text_content().strip()
-			if len(note_content) > 0:
+			note_content = self.parse_text_content(note)
+			if note_content:
 				if not "NOTES" in item_def:
 					item_def["NOTES"] = []
-				item_def["NOTES"].append(self.compress_newlines(note_content))
+				item_def["NOTES"].append(note_content)
 			item.remove(note)
 		if "NOTES" in item_def:
 			item_def["NOTES"] = sorted(item_def["NOTES"], key=len)
 		
 		for warning in sel_warnings(item):
-			warning_content = warning.text_content().strip()
-			if len(warning_content) > 0:
+			warning_content = self.parse_text_content(warning)
+			if warning_content:
 				if not "WARNINGS" in item_def:
 					item_def["WARNINGS"] = []
-				item_def["WARNINGS"].append(self.compress_newlines(warning_content))
+				item_def["WARNINGS"].append(warning_content)
 			item.remove(warning)
 		if "WARNINGS" in item_def:
 			item_def["WARNINGS"] = sorted(item_def["WARNINGS"], key=len)
 
+	#REGEX_EXTRACT_CALLBACK_ARGS = r"(?:\(\s*(.+?,\s*.+?)\s*\)|<page(?:\s*[^>]++)?>([^<>\s]+?)<\/page>(?:\s*(.+?)\s*-.*?$|\s*(.+?)$))"
+	REGEX_EXTRACT_CALLBACK_ARGS = r"(?:^(?:\* +)?|: +)\[(.+?)\]\((.+?)\) +(?:(.+) +- +(.+?)$|(.+))"
 	def parse_generic_func(self, item, item_def):
 		if "FUNCTION" not in item_def and "EVENT" not in item_def:
 			# We're looking at an actual category page here
@@ -217,14 +222,25 @@ class WikiParser:
 				arg_def["NAME"] = arg.attrib["name"]
 			if "type" in arg.attrib and len(arg.attrib["type"]) > 0:
 				arg_def["TYPE"] = arg.attrib["type"]
-
+				
 				if arg_def["TYPE"] == "number":
 					for page in find_enum_links(arg):
 						link = page.text_content().strip()
 						if link.startswith("Enums/"):
 							arg_def["ENUM"] = link[len("Enums/"):]
-			
+						
 			self.add_item_content_def(arg, arg_def)
+
+			if arg_def["TYPE"] == "function" and "DESCRIPTION" in arg_def:
+				for match in re.finditer(self.REGEX_EXTRACT_CALLBACK_ARGS, arg_def["DESCRIPTION"], re.MULTILINE):
+					if not "CALLBACK" in arg_def: arg_def["CALLBACK"] = []
+					name = match.group(3) or match.group(5)
+					callback_param_def = {}
+					callback_param_def["TYPE"] = match.group(1)
+					callback_param_def["TYPE_LINK"] = match.group(2)
+					if name: callback_param_def["NAME"] = name
+					if match.group(4): callback_param_def["DESCRIPTION"] = match.group(4)
+					arg_def["CALLBACK"].append(callback_param_def)
 			
 			item_def["ARGUMENTS"].append(arg_def)
 
@@ -415,10 +431,11 @@ class WikiParser:
 	def get_subcategory_name(self, subcategory):
 		return (CSSSelector("summary > a")(subcategory) or CSSSelector("a")(subcategory))[0].attrib["search"].strip().replace(" ", "_")
 
-	def __init__(self, cached=False):
+	def __init__(self, cached=False, quiet=False):
 		self.USE_CACHE = cached
+		self.QUIET = quiet
 
-		self.TREE = html.fromstring(request(WIKI_URL + "/gmod/", self.USE_CACHE, "html"))
+		self.TREE = html.fromstring(request(WIKI_URL + "/gmod/", self.USE_CACHE, "html", self.QUIET))
 
 		# Discover panels first
 		# Panels must be found first to ensure PANEL hooks are filtered out
@@ -506,5 +523,5 @@ class WikiParser:
 		for category, items in self.PARSED.items():
 			strip_empty_keys(items)
 
-def scrape(cached = False):
-	return WikiParser(cached).PARSED
+def scrape(*args):
+	return WikiParser(*args).PARSED
