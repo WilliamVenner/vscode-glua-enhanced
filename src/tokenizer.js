@@ -40,7 +40,6 @@ class Tokenizer {
 			i++;
 
 			let char = str[i];
-			if (char === " " || char === "\t") continue;
 
 			if (this.openString) {
 
@@ -71,30 +70,41 @@ class Tokenizer {
 				if (char === "]") {
 					// Skip through and detect multiline string close
 					let equals = 0;
+					let tokenTail = "";
+					let tokenCloseTail = "";
 					while (i < str.length) {
 						i++;
 						switch(str[i]) {
 							case "=": {
 								equals += 1;
-								continue;
+								break;
 							}
 							case "]": {
 								if (equals == this.openMultilineString) {
 									this.openMultilineString = false;
-									break;
+									this.token += tokenCloseTail;
+									continue tokenize;
 								}
+								break;
 							}
-							default: break;
+							default: tokenCloseTail += str[i];
 						}
+						tokenTail += str[i];
 					}
+					this.token += tokenTail;
+				} else {
+					this.token += char;
 				}
 				continue;
 
 			} else {
+				
+				if (char === " " || char === "\t") continue;
 
 				if (char === "[") {
 					// Skip through and detect multiline string
 					let equals = 0;
+					multiline:
 					while (i < str.length) {
 						i++;
 						switch(str[i]) {
@@ -104,7 +114,8 @@ class Tokenizer {
 							}
 							case "[": {
 								this.openMultilineString = equals;
-								break;
+								this.token = "";
+								break multiline;
 							}
 							default:
 								this.invalidLua = true;

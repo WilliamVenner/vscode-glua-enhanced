@@ -11,7 +11,7 @@ const REGEXP_COLOR_REPLACER = /(\d+)(\s*,\s*)(\d+)(\s*,\s*)(\d+)(?:(\s*,\s*)(\d+
 const REGEXP_ENUM_COMPLETIONS = /((?:function|local)\s+)?(?<!\.|:)\b([A-Z][A-Z_\.]*)$/;
 const REGEXP_FUNC_COMPLETIONS = /(?<!\B|:|\.)(?:(function)\s+)?([A-Za-z_][A-Za-z0-9_]*)(\.|:)(?:[A-Za-z_][A-Za-z0-9_]*)?$/;
 const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1((?::|\.)(?:[A-Za-z0-9_]*[A-Za-z_])?)?(\s+noitcnuf\s+lacol)?/;
-const REGEXP_FUNC_DECL_COMPLETIONS = /(local\s+)?(?:function\s+([A-Za-z_][A-Za-z0-9_]*)?|(funct?i?o?n?))((?::|\.)(?:[A-Za-z_][A-Za-z0-9_]*)?)?$/;
+const REGEXP_FUNC_DECL_COMPLETIONS = /^[\t\t\f\v]*(local +)?(?:function +([A-Za-z_][A-Za-z0-9_]*)?|(funct?i?o?n?))((?::|\.)(?:[A-Za-z_][A-Za-z0-9_]*)?)?$/;
 const REGEXP_INSIDE_LUA_STR = /(?:("|')(?:(?:\\\1|\\\\|.)*?)(\1|$))|(?:\[(=*)\[(?:[\s\S]*?)(\]\3\]|$))/g;
 
 // String completions
@@ -209,7 +209,7 @@ class GLua {
 				let param = new vscode.ParameterInformation(this.generateTypeSignature(arg), "DESCRIPTION" in arg ? this.resolveDocumentation(arg).appendMarkdown(sigInfo.documentation ? "\n\n---" : "") : undefined);
 				if ("ENUM" in arg) param.ENUM = arg["ENUM"];
 
-				if (callback && arg_pos === i && "CALLBACK" in arg) {
+				if (callback && arg_pos === i) {
 					let paramSignatures = [];
 					this.pushSignature(activeCallbackParameter, paramSignatures, arg, undefined, undefined, sigInfo.documentation);
 
@@ -302,7 +302,7 @@ class GLua {
 
 		if (signatures.length > 0) {
 			if (callback) {
-				let activeParam = signatures[0].parameters[activeCallbackParameter];
+				let activeParam = signatures[0].parameters[activeParameter];
 				if ("CALLBACK_SIGNATURES" in activeParam) {
 					return activeParam.CALLBACK_SIGNATURES;
 				}
