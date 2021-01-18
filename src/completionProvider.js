@@ -12,9 +12,9 @@ const REGEXP_FUNC_DECL_COMPLETIONS = /^[\t\t\f\v]*(local +)?(?:function +([A-Za-
 const REGEXP_HOOK_COMPLETIONS = /hook\.(Add|Remove|GetTable|Run|Call)\s*\((?:["']|\[=*\[)$/;
 const REGEXP_VGUI_CREATE = /vgui\.Create\((?:["']|\[=*\[)$/;
 const REGEXP_LUA_COMPLETIONS = /(?:(?:include|AddCSLuaFile|CompileFile)\s*\(\s*(?:["']|\[=*\[)(?:lua\/)?|lua\/)([^\s]+\/)?$/;
-const REGEXP_MATERIAL_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:SetImage|SetMaterial))|Material|surface\.GetTextureID)\s*\(\s*(?:["']|\[=*\[)(?:materials\/)?|materials\/)([^\s]+\/)?$/;
-const REGEXP_SOUND_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound))|Sound|SoundDuration|sound\.Play(?:File)?|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/)([^\s]+\/)?/;
-const REGEXP_MODEL_COMPLETIONS = /(?:(?:(?:(?::|\.)(?:SetModel|SetWeaponModel))|Model|IsUselessModel|ClientsideModel|CreatePhysCollidesFromModel|ents\.FindByModel|NumModelSkins|player_manager\.TranslateToPlayerModelName|util\.(?:PrecacheModel|GetModelInfo|GetModelMeshes|IsModelLoaded|IsValidModel|IsValidProp)|ents\.CreateClientProp)\s*\(\s*(?:["']|\[=*\[)(?:models\/)?|models\/)([^\s]+\/)?$/;
+const REGEXP_MATERIAL_COMPLETIONS = /\b(?:(?:(?:(?::|\.)(?:SetImage|SetMaterial))|Material|surface\.GetTextureID)\s*\(\s*(?:["']|\[=*\[)(?:materials\/)?|materials\/)([^\s]+\/)?$/;
+const REGEXP_SOUND_COMPLETIONS = /\b(?:(?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound))|Sound|SoundDuration|sound\.Play(?:File)?|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/)([^\s]+\/)?/;
+const REGEXP_MODEL_COMPLETIONS = /\b(?:(?:(?:(?::|\.)(?:SetModel|SetWeaponModel))|(?<![^\s;=+\/\-\*,\)\({}])Model|IsUselessModel|ClientsideModel|CreatePhysCollidesFromModel|ents\.FindByModel|NumModelSkins|player_manager\.TranslateToPlayerModelName|util\.(?:PrecacheModel|GetModelInfo|GetModelMeshes|IsModelLoaded|IsValidModel|IsValidProp)|ents\.CreateClientProp)\s*\(\s*(?:["']|\[=*\[)|(models\/))([^\s]+\/)?$/;
 
 class CompletionProvider {
 	constructor(GLua) {
@@ -328,7 +328,7 @@ class CompletionProvider {
 
 		let models_match = term.match(REGEXP_MODEL_COMPLETIONS);
 		if (models_match) {
-			let path = (models_match[1] ? models_match[1] : "").split("/").filter((v) => v !== "").map((v) => v + "/");
+			let path = ((models_match[1] ? "models/" : "") + (models_match[2] ? models_match[2] : "")).split("/").filter((v) => v !== "").map((v) => v + "/");
 		
 			// Search workspace
 			return new Promise(resolve => { new Promise(resolve => {
@@ -348,7 +348,7 @@ class CompletionProvider {
 								let relPathNoWorkspace = showWorkspaceFolder ? relPath.replace(/^.+?\//, "") : relPath;
 
 								let folderTreeStack = CompletionProvider.workspace_model_files;
-								let relPathTree = relPathNoWorkspace.replace(/^models\//, "").split("/");
+								let relPathTree = relPathNoWorkspace.split("/");
 								for (let j = 0; j < relPathTree.length - 1; j++) {
 									let folder = relPathTree[j] + "/";
 									if (folder.length === 0) continue;

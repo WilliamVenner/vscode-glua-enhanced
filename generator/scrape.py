@@ -127,7 +127,6 @@ class WikiParser:
 		body = request(WIKI_URL + url.removeprefix(WIKI_URL) + "?format=text", self.USE_CACHE, "xml", self.QUIET)
 		return html.fromstring(body)
 
-	# TODO parse <added>YYYY.MM.DD</added>
 	# FIXME derma.SkinList
 
 	def parse_view_source(self, item, item_def):

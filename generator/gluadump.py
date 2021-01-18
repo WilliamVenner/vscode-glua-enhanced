@@ -53,5 +53,6 @@ def gluadump(wiki_scrape):
 				if "members" in entry and "MEMBERS" in wiki[name]:
 					inject_src(entry["members"], wiki[name]["MEMBERS"])
 	
-	for key in ["PANELS", "GLOBALS", "CLASSES"]:
+	for key in ["PANELS", "GLOBALS", "LIBRARIES"]:
 		inject_src(gluadump, wiki_scrape[key])
+	inject_src(gluadump["metatables"], wiki_scrape["CLASSES"])

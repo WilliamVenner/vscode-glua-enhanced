@@ -2,6 +2,7 @@ generator/scrape/
 .mypy_cache/
 .vscode/*
 !.vscode/launch.json
+!.vscode/tasks.json
 .DS_Store
 node_modules/
 *.code-workspace
