@@ -2,6 +2,8 @@
 
 const vscode = require("vscode");
 
+const REGEXP_INSIDE_LUA_STR = /(?:("|')(?:(?:\\\1|\\\\|.)*?)(\1|$))|(?:\[(=*)\[(?:[\s\S]*?)(\]\3\]|$))/g;
+
 const LUA_ESCAPE_SEQUENCES = {
 	"a": "\u2407",
 	"b": "[BS]",
@@ -31,9 +33,34 @@ class Tokenizer {
 		this.openParanthesis = [];
 		this.openShortFuncCall = false; // e.g. AddCSLuaFile "whatever.lua"
 
+		this.history = { 
+			functionCallsClosed: [],
+			functionCallsOpen: {},
+		};
+
 		if (str.length === 0) return;
 		if (str.length > vscode.workspace.getConfiguration("editor").get("maxTokenizationLineLength")) return;
-		
+
+		this.tokenize(str);
+
+		return;
+	}
+
+	functionCallOpen(i) {
+		let func = [this.token];
+		this.history.functionCallsOpen[func] = i - this.token.length - 1;
+		this.openParanthesis.push(func);
+		this.token = "";
+	}
+
+	functionCallClose(i) {
+		let func = this.openParanthesis.pop();
+		this.history.functionCallsClosed.push([func, this.history.functionCallsOpen[func], i + 1]);
+		delete this.history.functionCallsOpen[func];
+		this.token = "";
+	}
+
+	tokenize(str) {
 		let i = -1;
 		tokenize:
 		while (i < str.length - 1) {
@@ -139,9 +166,8 @@ class Tokenizer {
 					case "\"":
 						if (this.token.length > 0) {
 							this.openShortFuncCall = true;
-							this.openParanthesis.push([this.token]);
+							this.functionCallOpen(i);
 						}
-						this.token = "";
 						this.openString = char;
 						break;
 				
@@ -156,8 +182,7 @@ class Tokenizer {
 								}
 							}
 							if (funcValid) {
-								this.openParanthesis.push([this.token]);
-								this.token = "";
+								this.functionCallOpen(i);
 							} else {
 								this.invalidLua = true;
 								break;
@@ -169,8 +194,7 @@ class Tokenizer {
 		
 					case ")":
 						if (this.openParanthesis !== false) {
-							this.openParanthesis.pop();
-							this.token = "";
+							this.functionCallClose(i);
 							break;
 						} else {
 							this.invalidLua = true;
@@ -196,6 +220,13 @@ class Tokenizer {
 					case "=":
 						this.token = "";
 						continue;
+				
+					case ".":
+						if (str[i+1] === ".") {
+							// String concatenation
+							i++;
+							break;
+						}
 					
 					default:
 						if (char.match(TOKENIZER_ALLOWED_CHARS)) {
@@ -212,6 +243,7 @@ class Tokenizer {
 }
 
 module.exports = {
-	Tokenizer: Tokenizer,
-	LUA_ESCAPE_SEQUENCES: LUA_ESCAPE_SEQUENCES
+	Tokenizer,
+	LUA_ESCAPE_SEQUENCES,
+	REGEXP_INSIDE_LUA_STR
 };
