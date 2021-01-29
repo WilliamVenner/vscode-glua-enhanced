@@ -2,15 +2,16 @@
 
 const vscode = require("vscode");
 const fs = require("fs");
+const { REGEXP_INSIDE_LUA_STR } = require("./tokenizer");
+const { SCOPE_CONTROLLERS } = require("./constants");
 
-const REGEXP_INSIDE_LUA_STR = /(?:("|')(?:(?:\\\1|\\\\|.)*?)(\1|$))|(?:\[(=*)\[(?:[\s\S]*?)(\]\3\]|$))/g;
-
-const REGEXP_ENUM_COMPLETIONS = /((?:function|local)\s+)?(?<!\.|:)\b([A-Z][A-Z_\.]*)$/;
-const REGEXP_FUNC_COMPLETIONS = /(?<!\B|:|\.)(?:(function)\s+)?([A-Za-z_][A-Za-z0-9_]*)(\.|:)(?:[A-Za-z_][A-Za-z0-9_]*)?$/;
+const REGEXP_ENUM_COMPLETIONS = /((?:function|local)\s+)?(?<!\.|:)\b(([A-Z][A-Z_0-9]*)(?:(\.)(?:[A-Z][A-Z_0-9]*)?)*)$/;
+const REGEXP_FUNC_COMPLETIONS = /(?<!\B|:|\.)(?:(function)\s+)?([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*?)(?:(\.|:)(?:[A-Za-z_][A-Za-z0-9_]*)?)?$/;
 const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1((?::|\.)(?:[A-Za-z0-9_]*[A-Za-z_])?)?(\s+noitcnuf\s+lacol)?/;
 const REGEXP_FUNC_DECL_COMPLETIONS = /^[\t\t\f\v]*(local +)?(?:function +([A-Za-z_][A-Za-z0-9_]*)?|(funct?i?o?n?))((?::|\.)(?:[A-Za-z_][A-Za-z0-9_]*)?)?$/;
 const REGEXP_HOOK_COMPLETIONS = /hook\.(Add|Remove|GetTable|Run|Call)\s*\((?:["']|\[=*\[)$/;
 const REGEXP_VGUI_CREATE = /vgui\.Create\((?:["']|\[=*\[)$/;
+const REGEXP_NET_MESSAGE = /net\.(?:Receive|Start)\((?:["']|\[=*\[)$/;
 const REGEXP_LUA_COMPLETIONS = /(?:(?:include|AddCSLuaFile|CompileFile)\s*\(\s*(?:["']|\[=*\[)(?:lua\/)?|lua\/)([^\s]+\/)?$/;
 const REGEXP_MATERIAL_COMPLETIONS = /\b(?:(?:(?:(?::|\.)(?:SetImage|SetMaterial))|Material|surface\.GetTextureID)\s*\(\s*(?:["']|\[=*\[)(?:materials\/)?|materials\/)([^\s]+\/)?$/;
 const REGEXP_SOUND_COMPLETIONS = /\b(?:(?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound))|Sound|SoundDuration|sound\.Play(?:File)?|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/)([^\s]+\/)?/;
@@ -28,38 +29,26 @@ class CompletionProvider {
 		this.registerSubscriptions();
 	}
 
-	initResources() {
-		this.initSounds();
-		this.initMaterials();
-
-		console.log("vscode-glua initialized resources");
-	}
-
-	registerCompletionProvider(func, allowInStrings, ...triggerCharacters) {
-		let CompletionProvider = this;
-		this.GLua.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
-			resolveCompletionItem(item) { return CompletionProvider.GLua.WikiProvider.resolveCompletionItem(item) },
+	static registerCompletionProvider(provider, GLua, func, allowInStrings, ...triggerCharacters) {
+		let triggerCharacterRegex = triggerCharacters.length > 0 ? new RegExp(triggerCharacters.map(char => "\\" + char).join("") + "$") : undefined;
+		GLua.extension.subscriptions.push(vscode.languages.registerCompletionItemProvider("glua", {
+			resolveCompletionItem(item) { return GLua.WikiProvider.resolveCompletionItem(item) },
 			provideCompletionItems(document, pos, cancel, ctx) {
 				let term = CompletionProvider.getCompletionTerm(document, pos);
+
+				// Stupid fix for stupid VSCode
+				// FIXME 
+				if (triggerCharacterRegex && ctx.triggerCharacter === undefined && !term.match(triggerCharacterRegex)) return;
+
 				if (!allowInStrings && CompletionProvider.isTermInsideString(pos, term)) return;
-				return func(CompletionProvider, document, pos, cancel, ctx, term);
+
+				return func(provider, document, pos, cancel, ctx, term);
 			}
 		}, ...triggerCharacters));
 	}
 
-	registerSubscriptions() {
-		this.registerCompletionProvider(this.provideFilePathCompletionItem, true, "/", "\"", "'", "[");
-		this.registerCompletionProvider(this.provideStringCompletionItems, true, "\"", "'", "[");
-		this.registerCompletionProvider(this.provideSpecializedCompletionItems, false, ".", ":", "(");
-		this.registerCompletionProvider(this.provideArgumentCompletionItems, false, "(", ",", " ");
-		this.registerCompletionProvider(this.provideGeneralizedCompletionItems, false);
-	}
-
-	getCompletionTerm(document, pos) {
-		return document.lineAt(pos).text.substr(0, pos.character);
-	}
-
-	isTermInsideString(pos, term) {
+	static isTermInsideString(pos, term) {
+		REGEXP_INSIDE_LUA_STR.lastIndex = 0;
 		var match;
 		while ((match = REGEXP_INSIDE_LUA_STR.exec(term)) !== null) {
 			let str_range = new vscode.Range(pos.line, match.index, pos.line, match.index + match[0].length);
@@ -68,6 +57,47 @@ class CompletionProvider {
 			}
 		}
 		return false;
+	}
+
+	static getCompletionTerm(document, pos) {
+		return document.lineAt(pos).text.substr(0, pos.character);
+	}
+
+	initResources() {
+		this.initSounds();
+		this.initMaterials();
+
+		console.log("vscode-glua initialized resources");
+	}
+
+	registerSubscriptions() {
+		CompletionProvider.registerCompletionProvider(this, this.GLua, this.provideFilePathCompletionItem, true, "/", "\"", "'", "[");
+		CompletionProvider.registerCompletionProvider(this, this.GLua, this.provideStringCompletionItems, true, "\"", "'", "[");
+		CompletionProvider.registerCompletionProvider(this, this.GLua, this.provideSpecializedCompletionItems, false, ".", ":", "(");
+		CompletionProvider.registerCompletionProvider(this, this.GLua, this.provideArgumentCompletionItems, false, "(", ",", " ");
+		CompletionProvider.registerCompletionProvider(this, this.GLua, this.provideGeneralizedCompletionItems, false);
+		CompletionProvider.registerCompletionProvider(this, this.GLua, this.provideScopedCompletionItems, false);
+	}
+
+	createCompletionItems() {
+		this.completions = {
+			generic: new vscode.CompletionList(undefined, true),      // contains enums, globals, libraries, panels
+			genericFunc: new vscode.CompletionList(undefined, true),  // contains globals + meta functions
+			enum: new vscode.CompletionList(undefined, true),         // enums only (also include structs because they're uppercase)
+			global: new vscode.CompletionList(undefined, true),       // globals only
+			panel: new vscode.CompletionList(undefined, true),        // panels only
+			functionDecl: new vscode.CompletionList(undefined, true), // Structs and hook families only
+			metaFunc: new vscode.CompletionList(undefined, true),     // meta:Functions() only, but also include hooks here
+			hook: new vscode.CompletionList(),                        // hooks only
+			enumFamily: {},                                           // enum autocompletion during function signature
+			enumFamilySub: {},                                        // enum autocompletion when typing ENUM.<sub>
+			libraryFunc: {},                                          // library.functions() only
+			struct: {},                                               // STRUCT and STRUCT.VAR = VAL only
+		};
+
+		this.addWikiCompletionItems();
+
+		console.log("vscode-glua parsed wiki data successfully");
 	}
 
 	initSounds() {
@@ -188,6 +218,40 @@ class CompletionProvider {
 		console.log("vscode-glua initialized materials");
 	}
 
+	provideScopedCompletionItems(CompletionProvider, document, pos, cancel, ctx, term) {
+		let scopedCompletions = new vscode.CompletionList();
+
+		let chunk = CompletionProvider.GLua.GLuaParser.findChunkAt(document, pos);
+		if (chunk) {
+			let visited = new Map();
+			var token = chunk;
+			while (token) {
+				if (!visited.has(token)) {
+					visited.set(token, true);
+
+					if ("scope" in token) {
+						for (let name in token.scope) {
+							let scopeToken = token.scope[name];
+							if ((new vscode.Position(scopeToken.loc.end.line-1, scopeToken.loc.end.column)).isAfter(pos)) continue;
+
+							let kind = scopeToken.type === "FunctionDeclaration" ? vscode.CompletionItemKind.Function : vscode.CompletionItemKind.Variable;
+							if (visited.has(scopeToken) && visited.get(scopeToken) === kind) continue; visited.set(scopeToken, kind);
+
+							let completionItem = new vscode.CompletionItem(name, kind);
+							completionItem.DOC_TAG = false;
+							scopedCompletions.items.push(completionItem);
+						}
+					}
+				}
+
+				if ("parent" in token) token = token.parent;
+				else break;
+			}
+		}
+
+		if (scopedCompletions.items.length > 0) return scopedCompletions;
+	}
+
 	provideArgumentCompletionItems(CompletionProvider, document, pos, cancel, ctx, term) {
 		if (ctx.triggerCharacter === " " && !term.endsWith(", ")) return;
 
@@ -195,22 +259,25 @@ class CompletionProvider {
 		if (sigHelp && sigHelp.signatures.length > 0) {
 			let activeSignature = sigHelp.signatures[sigHelp.activeSignature];
 			let activeParam = activeSignature.parameters[activeSignature.activeParameter];
-			if (activeParam && "ENUM" in activeParam && activeParam["ENUM"] in CompletionProvider.enumFamilyCompletions) {
-				return CompletionProvider.enumFamilyCompletions[activeParam["ENUM"]];
+			if (activeParam && "ENUM" in activeParam && activeParam["ENUM"] in CompletionProvider.completions.enumFamily) {
+				return CompletionProvider.completions.enumFamily[activeParam["ENUM"]];
 			}
 		}
 	}
 
 	provideStringCompletionItems(CompletionProvider, document, pos, cancel, ctx, term) {
 		let vgui_create = term.match(REGEXP_VGUI_CREATE);
-		if (vgui_create) return CompletionProvider.panelCompletions;
+		if (vgui_create) return CompletionProvider.completions.panel;
+
+		let net_msg = term.match(REGEXP_NET_MESSAGE);
+		if (net_msg) return CompletionProvider.GLua.TokenIntellisenseProvider.compiledTokenData.completions.networkStrings;
 
 		let hook_completions = term.match(REGEXP_HOOK_COMPLETIONS);
 		if (hook_completions) {
 			if (hook_completions[1] == "Call") {
-				return CompletionProvider.hookCompletions;
+				return CompletionProvider.completions.hook;
 			} else {
-				return CompletionProvider.hookCompletions["GM"];
+				return CompletionProvider.completions.hook["GM"];
 			}
 		}
 	}
@@ -218,7 +285,15 @@ class CompletionProvider {
 	provideGeneralizedCompletionItems(CompletionProvider, document, pos, cancel, ctx, term) {
 		if (term.length >= 3) {
 			let enum_match = term.match(REGEXP_ENUM_COMPLETIONS);
-			if (enum_match && !enum_match[1] && enum_match[2]) return CompletionProvider.enumCompletions;
+			if (enum_match && !enum_match[1] && enum_match[2]) {
+				if (enum_match[4]) {
+					if (enum_match[3] in CompletionProvider.completions.enumFamilySub) {
+						return CompletionProvider.completions.enumFamilySub[enum_match[3]];
+					}
+				} else {
+					return CompletionProvider.completions.enum;
+				}
+			}
 		}
 
 		let func_decl_match = term.match(REGEXP_FUNC_DECL_COMPLETIONS);
@@ -226,12 +301,12 @@ class CompletionProvider {
 			// Hack to make sure it replaces (function )EFFECT:...
 			// TODO move to resolve? could be more optimized
 			let range = new vscode.Range(pos.line, func_decl_match.index, pos.line, pos.character);
-			for (let i = 0; i < CompletionProvider.functionDeclCompletions.items.length; i++) CompletionProvider.functionDeclCompletions.items[i].range = range;
+			for (let i = 0; i < CompletionProvider.completions.functionDecl.items.length; i++) CompletionProvider.completions.functionDecl.items[i].range = range;
 
 			if (!func_decl_match[3] && (!func_decl_match[2] || func_decl_match[2].length === 0 || func_decl_match[2].toUpperCase() !== func_decl_match[2])) {
-				return new vscode.CompletionList(CompletionProvider.genericFuncCompletions.items.concat(CompletionProvider.functionDeclCompletions.items), true);
+				return new vscode.CompletionList(CompletionProvider.completions.genericFuncCompletions.items.concat(CompletionProvider.functionDecl.items), true);
 			} else {
-				return CompletionProvider.functionDeclCompletions;
+				return CompletionProvider.completions.functionDecl;
 			}
 		}
 
@@ -246,13 +321,13 @@ class CompletionProvider {
 			if (global_match[1]) {
 				if (global_match[2]) {
 					// function Global(.|:)whatever
-					return CompletionProvider.metaFuncCompletions;
+					return CompletionProvider.completions.metaFunc;
 				} else {
 					// function Global...
-					return CompletionProvider.globalCompletions;
+					return CompletionProvider.completions.global;
 				}
 			} else {
-				return CompletionProvider.genericCompletions;
+				return CompletionProvider.completions.generic;
 			}
 		}
 	}
@@ -261,35 +336,58 @@ class CompletionProvider {
 		let func_match = term.match(REGEXP_FUNC_COMPLETIONS);
 		if (func_match) {
 			let func_ctx = func_match[1];
-			let func_name = func_match[2];
+			let func_name = func_match[2].replace(/(?:\.|:)$/, "");
 			let func_call = func_match[3];
 		
 			// Check for hook definitions first
 			if (func_call === ":" || (func_call === "." && func_ctx === "function")) {
 				let hook_family = (func_name === "GAMEMODE" ? "GM" : func_name);
-				if (hook_family in CompletionProvider.hookCompletions) {
-					return CompletionProvider.hookCompletions[hook_family];
+				if (hook_family in CompletionProvider.completions.hook) {
+					return CompletionProvider.completions.hook[hook_family];
 				}
 			}
 
 			// Then check for struct definition
 			if (func_call === ".") {
 				let struct = (func_name === "GAMEMODE" ? "GM" : func_name);
-				if (struct in CompletionProvider.structCompletions) {
-					return CompletionProvider.structCompletions[struct];
+				if (struct in CompletionProvider.completions.struct) {
+					return CompletionProvider.completions.struct[struct];
+				}
+
+				// Check for library
+				if (func_name in CompletionProvider.completions.libraryFunc) {
+					if (CompletionProvider.completions.libraryFunc[func_name] !== true) {
+						return CompletionProvider.completions.libraryFunc[func_name];
+					} else if (func_ctx == "function") {
+						return CompletionProvider.completions.metaFunc;
+					} else {
+						// It's a confirmed library function, we don't want to show the meta functions, so we do nothing here.
+						return;
+					}
 				}
 			}
 
-			if (func_name in CompletionProvider.libraryFuncCompletions) {
-				if (CompletionProvider.libraryFuncCompletions[func_name] !== true) {
-					return CompletionProvider.libraryFuncCompletions[func_name];
-				} else if (func_ctx == "function") {
-					return CompletionProvider.metaFuncCompletions;
-				} else {
-					// It's a confirmed library function, we don't want to show the meta functions, so we do nothing here.
+			if (func_call) {
+				// Check global tables
+				let globalTableKeys = term.trim().replace(/:/g, ".").split(".");
+				if (globalTableKeys.length > 1) {
+					let found = false;
+					let items = func_call === ":" ? CompletionProvider.GLua.TokenIntellisenseProvider.compiledTokenData.completions.globalFunctions : CompletionProvider.GLua.TokenIntellisenseProvider.compiledTokenData.completions.globals;
+					for (let i = 0; i < globalTableKeys.length; i++) {
+						let globalKey = globalTableKeys[i];
+						if (globalKey in items.subitems) {
+							items = items.subitems[globalKey];
+							found = true;
+						} else if (i !== globalTableKeys.length-1) {
+							found = false; break;
+						}
+					}
+					if (found) return items;
 				}
-			} else if ((func_call === "." && func_ctx === "function") || (!func_ctx && (func_call === ":" || ctx.triggerKind === vscode.CompletionTriggerKind.Invoke))) {
-				return CompletionProvider.metaFuncCompletions;
+			}
+
+			if (func_call === ":") {
+				return CompletionProvider.completions.metaFunc;
 			}
 		}
 	}
@@ -322,7 +420,7 @@ class CompletionProvider {
 
 					resolve(completions);
 
-				}).catch(reject);
+				}, reject);
 			});
 		}
 
@@ -378,7 +476,7 @@ class CompletionProvider {
 
 						resolve();
 					
-					}).catch(() => resolve);
+					}, resolve);
 				
 				} else resolve();
 
@@ -470,7 +568,7 @@ class CompletionProvider {
 
 						resolve();
 					
-					}).catch(() => resolve);
+					}, resolve);
 				
 				} else resolve();
 
@@ -558,7 +656,7 @@ class CompletionProvider {
 
 						resolve();
 					
-					}).catch(() => resolve);
+					}, resolve);
 				
 				} else resolve();
 
@@ -622,27 +720,15 @@ class CompletionProvider {
 		return completionItem;
 	}
 
-	createCompletionItems() {
-		this.genericCompletions = new vscode.CompletionList(undefined, true);      // contains enums, globals, libraries, panels
-		this.genericFuncCompletions = new vscode.CompletionList(undefined, true);  // contains globals + meta functions
-		this.enumCompletions = new vscode.CompletionList(undefined, true);         // enums only (also include structs because they're uppercase)
-		this.globalCompletions = new vscode.CompletionList(undefined, true);       // globals only
-		this.panelCompletions = new vscode.CompletionList(undefined, true);        // panels only
-		this.functionDeclCompletions = new vscode.CompletionList(undefined, true); // Structs and hook families only
-		this.metaFuncCompletions = new vscode.CompletionList(undefined, true);     // meta:Functions() only, but also include hooks here
-		this.hookCompletions = new vscode.CompletionList();                        // hooks only
-		this.enumFamilyCompletions = {}                                            // enum autocompletion during function signature
-		this.libraryFuncCompletions = {};                                          // library.functions() only
-		this.structCompletions = {};                                               // STRUCT and STRUCT.VAR = VAL only
-
+	addWikiCompletionItems() {
 		for (const [key, entries] of Object.entries(this.GLua.WikiProvider.wiki)) {
 			switch (key) {
 				case "HOOKS":
 					for (const [hook_family, hook_family_def] of Object.entries(entries)) {
-						this.hookCompletions[hook_family] = new vscode.CompletionList();
+						this.completions.hook[hook_family] = new vscode.CompletionList();
 
 						let add_to_meta = hook_family != "GM" && hook_family != "GAMEMODE";
-						if (add_to_meta && !(hook_family in this.metaFuncCompletions)) this.metaFuncCompletions[hook_family] = {};
+						if (add_to_meta && !(hook_family in this.completions.metaFunc)) this.completions.metaFunc[hook_family] = {};
 						for (const [hook_name, hook_def] of Object.entries(hook_family_def["MEMBERS"])) {
 							let completionItem = this.createCompletionItem(
 								"HOOK",
@@ -651,12 +737,12 @@ class CompletionProvider {
 								hook_def,
 								hook_family + ":" + hook_name
 							);
-							if (add_to_meta) this.metaFuncCompletions.items.push(completionItem);
-							this.hookCompletions[hook_family].items.push(completionItem);
-							this.hookCompletions.items.push(completionItem);
+							if (add_to_meta) this.completions.metaFunc.items.push(completionItem);
+							this.completions.hook[hook_family].items.push(completionItem);
+							this.completions.hook.items.push(completionItem);
 						}
 
-						this.functionDeclCompletions.items.push(this.createCompletionItem(
+						this.completions.functionDecl.items.push(this.createCompletionItem(
 							"FUNC_DECL_HOOK",
 							"function " + hook_family + ":",
 							vscode.CompletionItemKind.Constructor,
@@ -668,7 +754,7 @@ class CompletionProvider {
 						if (hook_family === "GM") {
 							hook_family_def["SEARCH"] = "GAMEMODE"
 							
-							this.functionDeclCompletions.items.push(this.createCompletionItem(
+							this.completions.functionDecl.items.push(this.createCompletionItem(
 								"FUNC_DECL_HOOK",
 								"function GAMEMODE:",
 								vscode.CompletionItemKind.Constructor,
@@ -694,13 +780,13 @@ class CompletionProvider {
 									library
 								);
 								if (!is_package && !("DESCRIPTION" in funcs)) completionItem.DOC_TAG = false;
-								(!completions.items ? CompletionProvider.globalCompletions : completions).items.push(completionItem);
+								(!completions.items ? CompletionProvider.completions.global : completions).items.push(completionItem);
 
-								CompletionProvider.libraryFuncCompletions[prefix + library] = new vscode.CompletionList();
-								step(funcs["MEMBERS"], CompletionProvider.libraryFuncCompletions[prefix + library], prefix + library + ".", false);
+								CompletionProvider.completions.libraryFunc[prefix + library] = new vscode.CompletionList();
+								step(funcs["MEMBERS"], CompletionProvider.completions.libraryFunc[prefix + library], prefix + library + ".", false);
 							} else {
 								// Mark this as a package.function() function
-								CompletionProvider.libraryFuncCompletions[prefix + library] = true;
+								CompletionProvider.completions.libraryFunc[prefix + library] = true;
 
 								let completionItem = CompletionProvider.createCompletionItem(
 									"FUNCTION",
@@ -715,13 +801,14 @@ class CompletionProvider {
 							}
 						}
 					}
-					step(entries, this.libraryFuncCompletions, "", true);
+					step(entries, this.completions.libraryFunc, "", true);
 					break;
 
 				case "CLASSES":
 					for (const [class_name, data] of Object.entries(entries)) {
 						for (const [func_name, func_def] of Object.entries(data["MEMBERS"])) {
-							this.metaFuncCompletions.items.push(this.createCompletionItem(
+							func_def.METHOD = true;
+							this.completions.metaFunc.items.push(this.createCompletionItem(
 								"META_FUNCTION",
 								func_name,
 								vscode.CompletionItemKind.Method,
@@ -735,16 +822,23 @@ class CompletionProvider {
 				case "PANELS":
 					for (const [panel_name, panel_def] of Object.entries(entries)) {
 						let completionItem = this.createCompletionItem("PANEL", panel_name, vscode.CompletionItemKind.Constant, panel_def);
-						this.panelCompletions.items.push(completionItem);
-						this.globalCompletions.items.push(completionItem);
+						this.completions.panel.items.push(completionItem);
+						this.completions.global.items.push(completionItem);
 
 						if ("MEMBERS" in panel_def) {
-							if (!(panel_name in this.libraryFuncCompletions)) {
-								this.libraryFuncCompletions[panel_name] = new vscode.CompletionList();
+							if (!(panel_name in this.completions.libraryFunc)) {
+								this.completions.libraryFunc[panel_name] = new vscode.CompletionList();
 							}
 							for (const [panel_func, panel_func_def] of Object.entries(panel_def["MEMBERS"])) {
 								if (typeof panel_func_def !== "object") continue;
-								this.libraryFuncCompletions[panel_name].items.push(this.createCompletionItem("PANEL_FUNCTION", panel_func, vscode.CompletionItemKind.Method, panel_func_def));
+								this.completions.libraryFunc[panel_name].items.push(this.createCompletionItem("PANEL_FUNCTION", panel_func, vscode.CompletionItemKind.Method, panel_func_def));
+								this.completions.metaFunc.items.push(this.createCompletionItem(
+									"META_FUNCTION",
+									panel_func,
+									vscode.CompletionItemKind.Method,
+									panel_func_def,
+									panel_name + ":" + panel_func
+								));
 							}
 						}
 					}
@@ -754,15 +848,15 @@ class CompletionProvider {
 					for (const [struct_name, struct_def] of Object.entries(entries)) {
 						let completionItem = this.createCompletionItem("STRUCT", struct_name, vscode.CompletionItemKind.Struct, struct_def);
 
-						this.globalCompletions.items.push(completionItem);
+						this.completions.global.items.push(completionItem);
 
 						let contains_a_function = false;
 
-						this.structCompletions[struct_name] = new vscode.CompletionList(undefined, true);
+						this.completions.struct[struct_name] = new vscode.CompletionList(undefined, true);
 						for (const [field_name, field_def] of Object.entries(struct_def["MEMBERS"])) {
 							let is_func = ("TYPE" in field_def && field_def["TYPE"] === "function");
 
-							this.structCompletions[struct_name].items.push(this.createCompletionItem(
+							this.completions.struct[struct_name].items.push(this.createCompletionItem(
 								"STRUCT_FIELD",
 								field_name,
 								is_func ? vscode.CompletionItemKind.Event : vscode.CompletionItemKind.Struct,
@@ -775,7 +869,7 @@ class CompletionProvider {
 						}
 						
 						if (contains_a_function && struct_name.toUpperCase() == struct_name) {
-							this.functionDeclCompletions.items.push(this.createCompletionItem(
+							this.completions.functionDecl.items.push(this.createCompletionItem(
 								"FUNC_DECL_STRUCT",
 								"function " + struct_name + ":",
 								vscode.CompletionItemKind.Struct,
@@ -784,13 +878,13 @@ class CompletionProvider {
 								"function " + struct_name
 							));
 
-							this.enumCompletions.items.push(completionItem);
+							this.completions.enum.items.push(completionItem);
 						}
 					}
 					break;
 
 				case "GLOBALS":
-					for (const [global_name, global_def] of Object.entries(entries)) this.globalCompletions.items.push(this.createCompletionItem(
+					for (const [global_name, global_def] of Object.entries(entries)) this.completions.global.items.push(this.createCompletionItem(
 						"GLOBAL",
 						global_name,
 						vscode.CompletionItemKind.Function,
@@ -800,11 +894,10 @@ class CompletionProvider {
 
 				case "ENUMS":
 					for (const [enum_name, enum_def] of Object.entries(entries)) {
-						if (!(enum_def["FAMILY"] in this.enumFamilyCompletions)) {
-							this.enumFamilyCompletions[enum_def["FAMILY"]] = new vscode.CompletionList();
-						}
+						if (!(enum_def["FAMILY"] in this.completions.enumFamily)) this.completions.enumFamily[enum_def["FAMILY"]] = new vscode.CompletionList();
+						if (!(enum_def["FAMILY"] in this.completions.enumFamilySub)) this.completions.enumFamilySub[enum_def["FAMILY"]] = new vscode.CompletionList();
 
-						let completionItem = this.createCompletionItem(
+						var completionItem = this.createCompletionItem(
 							"ENUM",
 							enum_name,
 							vscode.CompletionItemKind.Enum,
@@ -813,8 +906,15 @@ class CompletionProvider {
 							("REF_ONLY" in enum_def ? ("VALUE" in enum_def ? enum_def["VALUE"] : undefined) : undefined)
 						);
 
-						this.enumCompletions.items.push(completionItem);
-						this.enumFamilyCompletions[enum_def["FAMILY"]].items.push(completionItem);
+						this.completions.enum.items.push(completionItem);
+						this.completions.enumFamily[enum_def["FAMILY"]].items.push(completionItem);
+						
+						let match = enum_name.match(REGEXP_ENUM_COMPLETIONS);
+						if (match && match[4]) {
+							var completionItem = Object.create(completionItem);
+							completionItem.insertText = enum_name.substr(match[3].length+1);
+							this.completions.enumFamilySub[enum_def["FAMILY"]].items.push(completionItem);
+						}
 					}
 					break;
 			}
@@ -823,19 +923,21 @@ class CompletionProvider {
 		// Finally, a bit of extra data processing
 
 		// Merge struct hooks into struct autocompletions
-		for (const [struct_name, completions] of Object.entries(this.structCompletions)) {
-			if (!(struct_name in this.hookCompletions)) continue;
-			completions.items = completions.items.concat(this.hookCompletions[struct_name].items);
+		for (const [struct_name, completions] of Object.entries(this.completions.struct)) {
+			if (!(struct_name in this.completions.hook)) continue;
+			completions.items = completions.items.concat(this.completions.hook[struct_name].items);
 		}
 
 		// Create generic completions
-		this.genericCompletions.items = this.globalCompletions.items.concat(this.enumCompletions.items).concat(this.panelCompletions.items);
+		this.completions.generic.items = this.completions.global.items.concat(this.completions.enum.items).concat(this.completions.enum.items);
 
 		// Create generic function completions
-		this.genericFuncCompletions.items = this.globalCompletions.items.concat(this.metaFuncCompletions.items);
-
-		console.log("vscode-glua parsed wiki data successfully");
+		this.completions.genericFunc.items = this.completions.global.items.concat(this.completions.metaFunc.items);
 	}
 }
 
-module.exports = CompletionProvider;
+module.exports = {
+	CompletionProvider,
+	REGEXP_FUNC_COMPLETIONS,
+	REGEXP_ENUM_COMPLETIONS,
+}

@@ -14,6 +14,9 @@ function round2(n) {
 	return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+const LUAJIT_BYTECODE_URL = "http://wiki.luajit.org/Bytecode-2.0";
+const CLOSURE_URL = "https://www.lua.org/pil/6.1.html";
+
 class BytecodeHeatmapProvider {
 	constructor(GLua) {
 		this.GLua = GLua;
@@ -37,12 +40,10 @@ class BytecodeHeatmapProvider {
 		this.GLua.createTempFile("gluac.lua", text).then(([tmpPath, dispose]) => {
 			child_process.execFile(
 				this.GLua.extension.asAbsolutePath("src/lib/gluac/gluac" + (process.platform === "win32" ? ".exe" : "")), [tmpPath],
-				{ windowsHide: true, encoding: "binary", maxBuffer: (4 * text.length) + 1024, env: (process.platform === "win32" ? {} : { "LD_LIBRARY_PATH": this.GLua.extension.asAbsolutePath("src/lib/gluac") }) },
+				{ windowsHide: true, encoding: "buffer", maxBuffer: (4 * text.length) + 1024, env: (process.platform === "win32" ? {} : { "LD_LIBRARY_PATH": this.GLua.extension.asAbsolutePath("src/lib/gluac") }) },
 	
-				(err, _stdout, stderr) => {
+				(err, stdout, stderr) => {
 					dispose();
-					
-					let stdout = Buffer.from(_stdout.replace(/\r\n/g, "\n"), "binary");
 
 					if (err || stderr.length > 0) vscode.window.showErrorMessage("Error: " + (err || stderr.toString("utf8"))); else {
 						let heatMapResults;
@@ -60,17 +61,19 @@ class BytecodeHeatmapProvider {
 							if (weight === 0) return;
 							let opCodes = lineData[1];
 
-							let opCodeTable = "| Opcode | Weight | Total | % |\n|:-:|:-:|:-:|:-:|\n";
+							let opCodeTable = "| Opcode | Count | Weight/op | Weight | % |\n|:-:|:-:|:-:|:-:|:-:|\n";
 							let sortedOpCodes = [];
 							for (let opCode in opCodes) {
-								let cumWeight = opCodes[opCode];
-								sortedOpCodes.push([opCode, cumWeight]);
+								let count = opCodes[opCode][0];
+								let cumWeight = opCodes[opCode][1];
+								sortedOpCodes.push([opCode, cumWeight, count]);
 							}
 							sortedOpCodes.sort((a, b) => b[1] - a[1]);
 							for (let i = 0; i < sortedOpCodes.length; i++) {
 								let opCode = sortedOpCodes[i][0];
 								let cumWeight = sortedOpCodes[i][1];
-								opCodeTable += "| [`" + opCode + "`](http://wiki.luajit.org/Bytecode-2.0) | " + round2(opcodesWeight[opCode]) + " | " + round2(cumWeight) + " | " + round2((cumWeight / weight) * 100) + "% |\n";
+								let count = sortedOpCodes[i][2];
+								opCodeTable += "| [`" + opCode + "`](" + (opCode === "CLOSURE" ? CLOSURE_URL : LUAJIT_BYTECODE_URL) + ") | " + count + " | " + round2(opcodesWeight[opCode]) + " | " + round2(cumWeight) + " | " + round2((cumWeight / weight) * 100) + "% |\n";
 							}
 
 							let docLine = textEditor.document.lineAt(line-1);
@@ -80,7 +83,7 @@ class BytecodeHeatmapProvider {
 							decorations.push({
 								renderOptions: { before: { opacity: String(heat / 2) } },
 								range: new vscode.Range(pos, posLineEnd),
-								hoverMessage: new vscode.MarkdownString("Bytecode Weight: " + round2(weight) + "\n\nHeat: " + round2(heat * 100) + "%" + "\n\n" + opCodeTable)
+								hoverMessage: new vscode.MarkdownString("Bytecode Weight: " + round2(weight) + " (File Max: " + round2(maxHeat) + ")\n\nHeat: " + round2(heat * 100) + "%" + "\n\n" + opCodeTable)
 							});
 						});
 	

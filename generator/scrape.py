@@ -35,7 +35,7 @@ def request(url, cached=False, cache_extension="html", quiet=False):
 	if response.status >= 200 and response.status < 300:
 		body = response.data.decode("utf-8")
 
-		f = open(cached_path, "w", encoding="utf-8")
+		f = open(cached_path, "w", encoding="utf-8", newline="\n")
 		f.write(body)
 		f.close()
 		
@@ -68,7 +68,6 @@ class WikiParser:
 		"rs": "SERVER",
 		"intrn": "INTERNAL",
 		"event": "EVENT",
-		"method": "METHOD",
 		"f": "FUNCTION",
 		"new": "NEW",
 	}
@@ -374,7 +373,7 @@ class WikiParser:
 
 			self.queue_page_parse(self.parse_struct, name, child.attrib["href"], struct_def)
 
-	def parse_subcategory(self, category, parsed, category_items, strip_name=""):
+	def parse_subcategory(self, category, parsed, category_items):
 		for child in list(category_items):
 			name = self.get_subcategory_name(child)
 
@@ -428,7 +427,7 @@ class WikiParser:
 				self.parse_subcategories(subcategory_def, sel_category_list(item)[0], deprecated=deprecated)
 
 	def get_subcategory_name(self, subcategory):
-		return (CSSSelector("summary > a")(subcategory) or CSSSelector("a")(subcategory))[0].attrib["search"].strip().replace(" ", "_")
+		return (CSSSelector("summary > a")(subcategory) or CSSSelector("a")(subcategory))[0].text_content()#attrib["search"].strip().replace(" ", "_")
 
 	def __init__(self, cached=False, quiet=False):
 		self.USE_CACHE = cached

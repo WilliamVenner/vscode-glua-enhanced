@@ -55,7 +55,7 @@ var opcodesWeight = Object.freeze({
 	"USETN": 3,
 	"USETP": 3,
 	"UCLO": 0, // TODO: to test if it should cost anything because you can't have UCLO without FNEW
-	"FNEW": 10, // Functions are expensive
+	"FNEW": 1,
 	"TNEW": 8, // New table with preallocated space, it costs more than TDUP because we failed to template the content (non-literal values in the constructor), also to punish people for defining empty table with filling it later 
 	"TDUP": 6, // Table from template TODO: adjust the cost tbd
 	"GGET": 4, // Indexing global table, costy than upvalue
@@ -85,7 +85,8 @@ var opcodesWeight = Object.freeze({
 	"FORL": 0, // Costs nothing because it ends the loop
 	"ITERL": 0, // Costs nothing because it ends the loop
 	"LOOP": 1, // Generic loop, let's count as FORI just for initializing
-	"JMP": 0, // TODO: Should we pay for it? this is the most common opcode that exists in any comparison condition and in generic loops
+	"JMP": 0, // TODO: Should we pay for it? this is the most common opcode that exists in any comparison condition and in generic loops,
+	"CLOSURE": 10, // Nested functions very expensive
 })
 
 var BCDUMP = {
@@ -94,6 +95,18 @@ var BCDUMP = {
 	"F_FFI": 0x04,
 	"F_FR2": 0x08,
 	"F_KNOWN": (0x08 * 2 - 1),
+	"KGC_CHILD": 0,
+	"KGC_TAB": 1,
+	"KGC_I64": 2,
+	"KGC_U64": 3,
+	"KGC_COMPLEX": 4,
+	"KGC_STR": 5,
+	"KTAB_NIL": 0,
+	"KTAB_FALSE": 1,
+	"KTAB_TRUE": 2,
+	"KTAB_INT": 3,
+	"KTAB_NUM": 4,
+	"KTAB_STR": 5,
 }
 
 function ReadULEB(obj) {
@@ -114,14 +127,50 @@ function ReadULEB(obj) {
 	return v
 }
 
-function ReadOpcode(obj) { // This function doesn't read instructions, just the opcode
+function ReadInstruction(obj) { // This function doesn't read instructions, just the opcode
+	var caret = obj.caret
 	obj.MoveCaret(4)
 
-	return obj.buf[obj.caret]
+	return [obj.buf[caret], obj.buf[caret + 2] + (obj.buf[caret + 3] << 8)]
 }
 
 function GetOpcodeName(version, op) { // Get opcode name depending on the version, .trim is required to lookup the opcode in opcodesWeight later on
 	return (version == 1 ? bcnames2_0 : bcnames2_1).slice(op * 6, op * 6 + 6).trim()
+}
+
+function ReadGCKV(obj) { // Barely reads table template, just to skip
+	var gctype = ReadULEB(obj)
+
+	if (gctype == BCDUMP.KTAB_INT) {
+		ReadULEB(obj)
+	} else if (gctype == BCDUMP.KTAB_NUM) {
+		ReadULEB(obj)
+		ReadULEB(obj)
+	} else if (gctype > BCDUMP.KTAB_STR) {
+		obj.MoveCaret(gctype - BCDUMP.KTAB_STR)
+	}
+}
+
+function ReadProtoKGC(obj) {  // Barely reads table template, just to skip
+	var gctype = ReadULEB(obj)
+
+	if (gctype == BCDUMP.KGC_CHILD) {
+		return obj.AddChild(obj.chunk.protos.pop())
+	} else if (gctype == BCDUMP.KGC_TAB) {
+		var narray = ReadULEB(obj)
+		var nhash = ReadULEB(obj)
+
+		for (var i = 0; i < narray; i++) {
+			ReadGCKV(obj)
+		}
+
+		for (var i = 0; i < nhash; i++) {
+			ReadGCKV(obj)
+			ReadGCKV(obj)
+		}
+	} else if (gctype > BCDUMP.KGC_STR) {
+		obj.MoveCaret(gctype - BCDUMP.KTAB_STR)
+	}
 }
 
 function ReadDebugLine(obj, bytes, isle) { // Depending on bytes and isle we read the line number.
@@ -153,6 +202,7 @@ class CChunk {
 		this.buf = buf
 		this.caret = 4
 		this.protos = []
+		this.mainproto = undefined
 		this.flags = 0
 		this.version = -1
 		this.chunkname = ""
@@ -197,6 +247,8 @@ class CProto {
 		this.lineinfo = ""
 		this.sizebc = 0
 		this.insts = []
+		this.kgcs = []
+		this.children = []
 		this.firstline = 0
 		this.numline = 0
 		this.flags = 0
@@ -211,10 +263,17 @@ class CProto {
 		this.caret += v
 	}
 
-	ReadProto() {
-		this.caret += 4 // Skipping unused info
+	AddChild(v) {
+		this.children.push(v)
+		return v
+	}
 
-		ReadULEB(this) // Size of GCable objects
+	ReadProto() {
+		this.MoveCaret(3) // Skipping unused info
+		var sizeuv = this.buf[this.caret] // Amount of Upvalues
+		this.MoveCaret(1)
+
+		var sizekgc = ReadULEB(this) // Size of GCable objects
 		ReadULEB(this) // Size of lua_Number objects
 		var sizebc = ReadULEB(this) // Amount of instructions
 
@@ -228,8 +287,16 @@ class CProto {
 		}
 
 		for (var line = 0; line < sizebc; line++) { // Reading instructions
-			var op = ReadOpcode(this) // TODO: Is it affected by endianness?
-			this.insts.push([op]) // Array for line slot
+			var [op, d] = ReadInstruction(this) // TODO: Is it affected by endianness?
+			this.insts.push([op, d]) // Array for line slot
+		}
+
+		for (var uv = 0; uv < sizeuv; uv++) {
+			this.MoveCaret(2) // Skipping
+		}
+
+		for (var kgc = 0; kgc < sizekgc; kgc++) {
+			this.kgcs.push(ReadProtoKGC(this)) // Reading KGC to find children protos
 		}
 
 		if (sizedbg != 0) {
@@ -238,7 +305,7 @@ class CProto {
 			var isle = (this.chunk.flags & BCDUMP.F_BE) == 0 // Is little endiann
 
 			for (var line = 0; line < sizebc; line++) {
-				this.insts[line][1] = ReadDebugLine(this, bytenum, isle) // Store in [1]
+				this.insts[line][2] = ReadDebugLine(this, bytenum, isle) // Store in [1]
 			}
 		}
 	}
@@ -277,39 +344,49 @@ function ReadChunk(bc) { // bc: Buffer
 		Chunk.AddProto(proto)
 		Chunk.MoveCaret(protolen) // Even if something fail in reading the proto chunk moves on
 	}
+	Chunk.mainproto = Chunk.protos[Chunk.protos.length - 1]
 
 	return Chunk
 }
 
+function ProtoHeatMap(Proto, chunk, LineHeatMap, MaxWeight) {
+	var version = chunk.version
+	for (var inst of Proto.insts) { // Each instructions
+		var linenum = Proto.firstline + inst[2]
+		var opCode = GetOpcodeName(version, inst[0])
+		if (opCode == "FNEW") {
+			linenum = Proto.kgcs[Proto.kgcs.length - 1 - inst[1]].firstline // To show accurate position of the function we use its declaration line
+		}
+
+		if (!LineHeatMap[linenum]) { // if heatmap doesn't have the value, predefine it
+			LineHeatMap[linenum] = [0, {}]
+		}
+		if (!(opCode in opcodesWeight)) {
+			console.warn("Unknown opcode: \"" + opCode + "\"")
+		} else {
+			var weight = opcodesWeight[opCode]
+			if (opCode == "FNEW" && chunk.mainproto != Proto) { opCode = "CLOSURE" } // new functions in main chunk will cost less
+
+			if (!(opCode in LineHeatMap[linenum][1])) LineHeatMap[linenum][1][opCode] = [0, 0]; // Count, Cumulative weight
+			LineHeatMap[linenum][1][opCode][0] += 1
+			LineHeatMap[linenum][1][opCode][1] += weight
+
+			LineHeatMap[linenum][0] += weight // Sum
+			MaxWeight = Math.max(MaxWeight, LineHeatMap[linenum][0])
+		}
+	}
+	for (var child of Proto.children) {
+		MaxWeight = ProtoHeatMap(child, chunk, LineHeatMap, MaxWeight)
+	}
+	return MaxWeight
+}
+
 function MakeHeatMap(chunk) {
-	let MaxWeight = 0;
 	var LineHeatMap = [] // Return
 	if (chunk.IsStripped()) {
 		return [LineHeatMap, false]
 	} // We can't make the heatmap
-	var version = chunk.version
-
-	for (var Proto of chunk.protos) { // Iterating protos
-		for (var inst of Proto.insts) { // Each instructions
-			var linenum = Proto.firstline + inst[1]
-			if (!LineHeatMap[linenum]) { // if heatmap doesn't have the value, predefine it
-				LineHeatMap[linenum] = [0, {}]
-			}
-			var opCode = GetOpcodeName(version,inst[0])
-			if (!(opCode in opcodesWeight)) {
-				console.warn("Unknown opcode: \"" + opCode + "\"")
-			} else {
-				var weight = opcodesWeight[opCode]
-				
-				if (!(opCode in LineHeatMap[linenum][1])) LineHeatMap[linenum][1][opCode] = 0; // Cumulative weight
-				LineHeatMap[linenum][1][opCode] += weight
-
-				LineHeatMap[linenum][0] += weight // Sum
-				MaxWeight = Math.max(MaxWeight, LineHeatMap[linenum][0])
-			}
-		}
-	}
-
+	let MaxWeight = ProtoHeatMap(chunk.mainproto, chunk, LineHeatMap, 0) // Iterating protos
 	return [LineHeatMap, MaxWeight]
 }
 

@@ -6,7 +6,7 @@ const config = {
 	target: "node",
 	entry: "./src/extension.js",
 	devtool: "source-map",
-	externals: { vscode: "commonjs vscode", fs: "fs" },
+	externals: { vscode: "commonjs vscode", fs: "fs", debug: "debug" },
 	resolve: { extensions: [".js"] },
 	output: {
 		path: path.resolve(__dirname, "dist"),

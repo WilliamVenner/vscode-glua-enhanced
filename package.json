@@ -1,10 +1,12 @@
 {
 	"name": "vscode-glua-enhanced",
-	"displayName": "GLua Enhanced",
+	"displayName": "GLua Enhanced (Garry's Mod/Gmod Lua)",
 	"description": "GLua language support for Visual Studio Code",
 	"license": "GNU General Public License v3.0",
-	"version": "0.4.3",
-	"engines": { "vscode": "^0.10.1" },
+	"version": "1.0.0",
+	"engines": {
+		"vscode": "^0.10.1"
+	},
 	"icon": "resources/logo.png",
 	"publisher": "venner",
 	"repository": {
@@ -50,6 +52,29 @@
 				"label": "GLua",
 				"path": "./resources/file-icons/icon-theme.json"
 			}
+		],
+		"colors": [
+			{
+				"id": "glua_enhanced.typeHints.color",
+				"description": "Text color of type hints",
+				"defaults": {
+					"dark": "#A0A0A0F0",
+					"light": "#747474",
+					"highContrast": "#BEBEBE"
+				}
+			}
+		],
+		"commands": [
+			{
+				"command": "glua-enhanced.findGlobals",
+				"title": "Find Globals",
+				"category": "GLua Enhanced"
+			},
+			{
+				"command": "glua-enhanced.bytecodeHeatmap",
+				"title": "Generate Bytecode Heatmap",
+				"category": "GLua Enhanced"
+			}
 		]
 	},
 	"scripts": {
@@ -58,7 +83,10 @@
 		"webpack-dev": "webpack --mode development --watch"
 	},
 	"dependencies": {
-		"markdown-escape": "^1.1.0"
+		"follow-redirects": "^1.13.1",
+		"gluaparse": "git+https://github.com/WilliamVenner/glua.js.git",
+		"markdown-escape": "^1.1.0",
+		"md5": "^2.3.0"
 	},
 	"devDependencies": {
 		"vsce": "^1.83.0",

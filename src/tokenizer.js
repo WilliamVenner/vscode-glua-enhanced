@@ -17,7 +17,6 @@ const LUA_ESCAPE_SEQUENCES = {
 	"'": "'",
 };
 
-const TOKENIZER_ALLOWED_CHARS = /[A-Za-z0-9_:\.=|&{}]/;
 const TOKENIZER_ALLOWED_VAR_NAME = /^[A-Za-z_][A-Za-z_0-9]*$/;
 const TOKENIZER_FUNC_SPLIT = /:|\./g;
 
@@ -158,7 +157,7 @@ class Tokenizer {
 				}
 
 				switch(char) {
-					case ";":
+					// case ";":
 					case "\n":
 						throw new Error("Tokenizer can only tokenize single lines");
 
@@ -229,12 +228,7 @@ class Tokenizer {
 						}
 					
 					default:
-						if (char.match(TOKENIZER_ALLOWED_CHARS)) {
-							this.token += char;
-						} else {
-							this.invalidLua = true;
-							break tokenize;
-						}
+						this.token += char;
 				}
 
 			}

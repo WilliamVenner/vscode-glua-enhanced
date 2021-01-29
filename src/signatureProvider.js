@@ -9,10 +9,10 @@ class SignatureProvider {
 		this.GLua = GLua;
 		this.GLua.SignatureProvider = this;
 
-		this.signatureProviders = {
+		this.signatures = {
 			globals: {},
 			functions: {},
-			metaFunctions: {}
+			metaFunctions: {},
 		};
 
 		this.registerSubscriptions();
@@ -31,10 +31,10 @@ class SignatureProvider {
 	}
 
 	generateTypeSignature(arg) {
-		if (arg["TYPE"] === "vararg") {
-			return "..."
+		if ("NAME" in arg && "TYPE" in arg && arg.NAME.toLowerCase() !== arg.TYPE.toLowerCase()) {
+			return arg["NAME"] + ": " + (arg["TYPE"] === "vararg" ? "..." : arg["TYPE"]);
 		} else {
-			return arg["NAME"] + ": " + arg["TYPE"];
+			return "TYPE" in arg ? (arg["TYPE"] === "vararg" ? "..." : arg["TYPE"]) : ("NAME" in arg ? arg["NAME"] : "UNKNOWN");
 		}
 	}
 
@@ -104,45 +104,48 @@ class SignatureProvider {
 		let signatures = [];
 
 		while (true) {
-			if (!func_parse) {
-				let func_name = func[0];
+			for (let i = 0; i <= 1; i++) {
+				let signatureProvider = i === 0 ? this.signatures : this.GLua.TokenIntellisenseProvider.compiledTokenData.signatures;
+				if (!func_parse) {
+					let func_name = func[0];
 
-				// Show globals only
-				if (func_name in this.signatureProviders.globals) {
-					this.pushSignatures(activeParameter, signatures, this.signatureProviders.globals[func_name], callback, activeCallbackParameter);
-				}
-			} else {
-				let full_call = func_parse[0];
-				let library_or_meta = func_parse[1];
-				let func_call = func_parse[2];
-				let meta_func = func_parse[3];
-
-				if (func_call === ":" && this.GLua.CompletionProvider.hookCompletions[library_or_meta]) {
-					// Show hooks only
-					if (full_call in this.signatureProviders.metaFunctions) {
-						this.pushSignatures(activeParameter, signatures, this.signatureProviders.metaFunctions[full_call], callback, activeCallbackParameter);
+					// Show globals only
+					if (func_name in signatureProvider.globals) {
+						this.pushSignatures(activeParameter, signatures, signatureProvider.globals[func_name], callback, activeCallbackParameter);
 					}
-					break;
-				}
+				} else {
+					let full_call = func_parse[0];
+					let library_or_meta = func_parse[1];
+					let func_call = func_parse[2];
+					let meta_func = func_parse[3];
 
-				// Show libraries
-				if (full_call in this.signatureProviders.functions) {
-					if (callback && full_call == "hook.Add") {
-						let hookDocTag = "GM:" + func[1];
-						if (hookDocTag in this.signatureProviders.metaFunctions) {
-							this.pushSignatures(activeCallbackParameter, signatures, this.signatureProviders.metaFunctions[hookDocTag]);
-							break;
+					if (func_call === ":" && this.GLua.CompletionProvider.completions.hook[library_or_meta]) {
+						// Show hooks only
+						if (full_call in signatureProvider.metaFunctions) {
+							this.pushSignatures(activeParameter, signatures, signatureProvider.metaFunctions[full_call], callback, activeCallbackParameter);
 						}
+						continue;
+					}
+
+					// Show libraries
+					if (full_call in signatureProvider.functions) {
+						if (callback && full_call == "hook.Add") {
+							let hookDocTag = "GM:" + func[1];
+							if (hookDocTag in signatureProvider.metaFunctions) {
+								this.pushSignatures(activeCallbackParameter, signatures, signatureProvider.metaFunctions[hookDocTag]);
+								continue;
+							}
+						}
+						
+						this.pushSignatures(activeParameter, signatures, signatureProvider.functions[full_call], callback, activeCallbackParameter);
+						continue;
 					}
 					
-					this.pushSignatures(activeParameter, signatures, this.signatureProviders.functions[full_call], callback, activeCallbackParameter);
-					break;
-				}
-				
-				// Show meta functions
-				if (meta_func in this.signatureProviders.metaFunctions) {
-					this.pushSignatures(activeParameter, signatures, this.signatureProviders.metaFunctions[meta_func], callback, activeCallbackParameter);
-					break;
+					// Show meta functions
+					if (meta_func in signatureProvider.metaFunctions) {
+						this.pushSignatures(activeParameter, signatures, signatureProvider.metaFunctions[meta_func], callback, activeCallbackParameter);
+						continue;
+					}
 				}
 			}
 			break;
@@ -150,7 +153,7 @@ class SignatureProvider {
 
 		if (signatures.length > 0) {
 			if (callback) {
-				let activeParam = signatures[0].parameters[activeParameter];
+				let activeParam = signatures[0].parameters[activeCallbackParameter];
 				if ("CALLBACK_SIGNATURES" in activeParam) {
 					return activeParam.CALLBACK_SIGNATURES;
 				}
@@ -165,36 +168,34 @@ class SignatureProvider {
 	registerSignature(completionItem, tag, item_def) {
 		switch(tag) {
 			case "GLOBAL":
-				this.signatureProviders.globals[item_def["SEARCH"]] = item_def;
+				this.signatures.globals[item_def["SEARCH"]] = item_def;
 				break;
 
 			case "FUNCTION":
-				this.signatureProviders.functions[item_def["SEARCH"]] = item_def;
+				this.signatures.functions[item_def["SEARCH"]] = item_def;
 				break;
 		
 			case "HOOK":
 				var sigName = completionItem.label;
-				if (sigName in this.signatureProviders.metaFunctions) {
-					if (!Array.isArray(this.signatureProviders.metaFunctions[sigName])) {
-						this.signatureProviders.metaFunctions[sigName] = [ this.signatureProviders.metaFunctions[sigName] ];
+				if (sigName in this.signatures.metaFunctions) {
+					if (!Array.isArray(this.signatures.metaFunctions[sigName])) {
+						this.signatures.metaFunctions[sigName] = [ this.signatures.metaFunctions[sigName] ];
 					}
-					this.signatureProviders.metaFunctions[sigName].push(item_def);
+					this.signatures.metaFunctions[sigName].push(item_def);
 				} else {
-					this.signatureProviders.metaFunctions[sigName] = item_def;
+					this.signatures.metaFunctions[sigName] = item_def;
 				}
 				// do not break
 
 			case "META_FUNCTION":
-				if (tag !== "HOOK" || (completionItem.insertText && completionItem.insertText !== completionItem.label)) {
-					var sigName = completionItem.insertText || completionItem.label;
-					if (sigName in this.signatureProviders.metaFunctions) {
-						if (!Array.isArray(this.signatureProviders.metaFunctions[sigName])) {
-							this.signatureProviders.metaFunctions[sigName] = [ this.signatureProviders.metaFunctions[sigName] ];
-						}
-						this.signatureProviders.metaFunctions[sigName].push(item_def);
-					} else {
-						this.signatureProviders.metaFunctions[sigName] = item_def;
+				var sigName = completionItem.insertText || completionItem.label;
+				if (sigName in this.signatures.metaFunctions) {
+					if (!Array.isArray(this.signatures.metaFunctions[sigName])) {
+						this.signatures.metaFunctions[sigName] = [ this.signatures.metaFunctions[sigName] ];
 					}
+					this.signatures.metaFunctions[sigName].push(item_def);
+				} else {
+					this.signatures.metaFunctions[sigName] = item_def;
 				}
 				break;
 		}

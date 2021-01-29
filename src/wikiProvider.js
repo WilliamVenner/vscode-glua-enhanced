@@ -3,6 +3,7 @@ const escape = require("markdown-escape");
 
 const WIKI_URL = "https://wiki.facepunch.com/gmod/";
 const GITHUB_URL = "https://github.com/Facepunch/garrysmod/blob/master/garrysmod/";
+const GITHUB_URL_RAW = "https://github.com/Facepunch/garrysmod/raw/master/garrysmod/";
 
 class WikiProvider {
 	constructor(GLua) {
@@ -10,6 +11,10 @@ class WikiProvider {
 		this.GLua.WikiProvider = this;
 
 		this.initWiki();
+	}
+
+	static getSrcGitHubURL(src, raw) {
+		return (raw ? GITHUB_URL_RAW : GITHUB_URL) + src[0] + "#" + (src[1].split("-").map((line) => "L" + line).join("-"));
 	}
 
 	getRealmIcon(client, menu, server) {
@@ -61,6 +66,7 @@ class WikiProvider {
 		if ("INTERNAL" in doc) flags.push(this.getLabelIcon("internal"));
 		if ("REF_ONLY" in doc) flags.push(this.getLabelIcon("reference_only"));
 		if ("PREDICTED" in doc) flags.push(this.getLabelIcon("predicted"));
+		if ("NETWORKVAR" in doc) flags.push(this.getLabelIcon("networkvar"));
 		if (flags.length > 0) markdown.push(flags.join(" "));
 
 		if (label) markdown.push("**" + escape(label) + "**")
@@ -92,7 +98,7 @@ class WikiProvider {
 			links.push({ label: "$(edit) Edit", link: WIKI_URL + doc["LINK"].replace(/#(.*?)$/, "") + "~edit" });
 		}
 		if ("SRC" in doc) {
-			links.push({ label: "$(source-control) View Source", link: GITHUB_URL + doc["SRC"][0] + "#" + (doc["SRC"][1].split("-").map((line) => "L" + line).join("-")) });
+			links.push({ label: "$(source-control) View Source", link: WikiProvider.getSrcGitHubURL(doc["SRC"]) });
 		}
 		if (links.length > 0) markdown.push(links.map((link) => "[" + escape(link.label) + "](" + link.link + ")").join(" | "));
 
@@ -100,12 +106,18 @@ class WikiProvider {
 	}
 
 	resolveCompletionItem(item) {
-		if (item.DOC_TAG === false) return;
+		if ("DOC_TAG" in item && item.DOC_TAG === false) return;
 
-		let DOC_TAG = "DOC_TAG" in item ? item.DOC_TAG : item.label;
-		if (DOC_TAG in this.docs) {
-			let doc = this.docs[DOC_TAG];
+		let doc;
 
+		if ("DOC" in item) {
+			doc = item.DOC;
+		} else {
+			let DOC_TAG = "DOC_TAG" in item ? item.DOC_TAG : item.label;
+			if (DOC_TAG in this.docs) doc = this.docs[DOC_TAG];
+		}
+
+		if (doc) {
 			if ("RAW_IMAGE" in doc) {
 				item.documentation = new vscode.MarkdownString("![" + escape(item.label) + "](file:///" + this.markdownURL(doc["RAW_IMAGE"]) + ")");
 				return item;
@@ -119,16 +131,16 @@ class WikiProvider {
 							item.documentation = new vscode.MarkdownString("```json\n" + str.replace(/(`|\\)/g, "\\$1") + "\n```");
 							resolve(item);
 						} catch(err) { reject() }
-					}).catch(reject);
+					}, reject);
 				});
 			}
 
 			item.documentation = this.resolveDocumentation(doc, item.label);
 
-			switch (doc["TAG"]) {
-				case "ENUM":
-					item.detail = doc["VALUE"];
-					break;
+			if (doc["TAG"] === "ENUM") {
+				item.detail = doc["VALUE"];
+			} else if ("NETWORKVAR" in doc) {
+				item.detail = "(" + doc["NETWORKVAR"] + ")";
 			}
 
 			return item;
@@ -153,6 +165,7 @@ class WikiProvider {
 		this.getLabelIcon("reference_only");
 		this.getLabelIcon("new");
 		this.getLabelIcon("predicted");
+		this.getLabelIcon("networkvar");
 
 		this.wiki = require("../resources/wiki.json");
 		this.docs = {};
