@@ -10,8 +10,8 @@ const REGEXP_FUNC_COMPLETIONS = /(?<!\B|:|\.)(?:(function)\s+)?([A-Za-z_][A-Za-z
 const REGEXP_GLOBAL_COMPLETIONS = /^(?=([A-Za-z0-9_]*[A-Za-z_]))\1((?::|\.)(?:[A-Za-z0-9_]*[A-Za-z_])?)?(\s+noitcnuf\s+lacol)?/;
 const REGEXP_FUNC_DECL_COMPLETIONS = /^[\t\t\f\v]*(local +)?(?:function +([A-Za-z_][A-Za-z0-9_]*)?|(funct?i?o?n?))((?::|\.)(?:[A-Za-z_][A-Za-z0-9_]*)?)?$/;
 const REGEXP_HOOK_COMPLETIONS = /hook\.(Add|Remove|GetTable|Run|Call)\s*\((?:["']|\[=*\[)$/;
-const REGEXP_VGUI_CREATE = /vgui\.Create\((?:["']|\[=*\[)$/;
-const REGEXP_NET_MESSAGE = /net\.(?:Receive|Start)\((?:["']|\[=*\[)$/;
+const REGEXP_VGUI_CREATE = /vgui\.Create\(\s*(?:["']|\[=*\[)$/;
+const REGEXP_NET_MESSAGE = /net\.(?:Receive|Start)\(\s*(?:["']|\[=*\[)$/;
 const REGEXP_LUA_COMPLETIONS = /(?:(?:include|AddCSLuaFile|CompileFile)\s*\(\s*(?:["']|\[=*\[)(?:lua\/)?|lua\/)([^\s]+\/)?$/;
 const REGEXP_MATERIAL_COMPLETIONS = /\b(?:(?:(?:(?::|\.)(?:SetImage|SetMaterial))|Material|surface\.GetTextureID)\s*\(\s*(?:["']|\[=*\[)(?:materials\/)?|materials\/)([^\s]+\/)?$/;
 const REGEXP_SOUND_COMPLETIONS = /\b(?:(?:(?:(?::|\.)(?:EmitSound|StopSound|StartLoopingSound))|Sound|SoundDuration|sound\.Play(?:File)?|surface\.PlaySound|util\.PrecacheSound)\s*\(\s*(?:["']|\[=*\[)(?:sound\/)?|sound\/)([^\s]+\/)?/;
@@ -616,6 +616,7 @@ class CompletionProvider {
 				if (ctx.triggerKind === vscode.CompletionTriggerKind.TriggerCharacter) {
 					// Refresh the sound files cache
 
+					// FIXME gamemode folder structure
 					Promise.resolve(vscode.workspace.findFiles("sound/**/*.*", undefined, undefined, cancel)).then(results => {
 						if (results && results.length > 0) {
 							let showWorkspaceFolder = vscode.workspace.workspaceFolders === undefined ? false : vscode.workspace.workspaceFolders.length > 1;

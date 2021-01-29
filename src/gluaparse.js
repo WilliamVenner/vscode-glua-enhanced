@@ -668,7 +668,7 @@ class GLuaParser {
 				}),
 
 				new Promise((resolve) => {
-					vscode.workspace.findFiles("lua/**/*.lua").then(results => {
+					vscode.workspace.findFiles("**/*.lua").then(results => {
 						let parsePromises = [];
 						for (let i = 0; i < results.length; i++) {
 							let path = results[i];
