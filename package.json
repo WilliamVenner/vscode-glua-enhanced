@@ -30,6 +30,10 @@
 		"snippets": [
 			{
 				"language": "glua",
+				"path": "./snippets/custom.json"
+			},
+			{
+				"language": "glua",
 				"path": "./snippets/keywords.json"
 			}
 		],

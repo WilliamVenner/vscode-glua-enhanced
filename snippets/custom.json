@@ -1,0 +1,35 @@
+{
+	"for-i":
+	{
+		"body":
+		[
+			"for ${1:var} = ${2:index}, ${3:count} do",
+			"\t$0",
+			"end"
+		],
+		"prefix": "for-i",
+		"description": "Makes a for loop"
+	},
+	"for-pairs":
+	{
+		"body":
+		[
+			"for ${1:key}, ${2:value} in pairs(${3:table}) do",
+			"\t$0",
+			"end"
+		],
+		"prefix": "for-pairs",
+		"description": "Makes a pairs loop"
+	},
+	"for-ipairs":
+	{
+		"body":
+		[
+			"for ${1:key}, ${2:value} in ipairs(${3:table}) do",
+			"\t$0",
+			"end"
+		],
+		"prefix": "for-ipairs",
+		"description": "Makes an ipairs loop"
+	}
+}
