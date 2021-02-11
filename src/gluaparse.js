@@ -972,6 +972,24 @@ class TokenIntellisenseProvider {
 			this.activeTokenDataDirty = true;
 		}
 	}
+	
+	provideGlobalTableCompletionItems(TokenIntellisenseProvider, func_name, func_call) {
+		let globalTableKeys = (func_name + func_call).replace(/:/g, ".").split(".");
+		if (globalTableKeys.length > 1) {
+			let found = false;
+			let items = func_call === ":" ? TokenIntellisenseProvider.compiledTokenData.completions.globalFunctions : TokenIntellisenseProvider.compiledTokenData.completions.globals;
+			for (let i = 0; i < globalTableKeys.length; i++) {
+				let globalKey = globalTableKeys[i];
+				if (globalKey in items.subitems) {
+					items = items.subitems[globalKey];
+					found = true;
+				} else if (i !== globalTableKeys.length-1) {
+					found = false; break;
+				}
+			}
+			if (found) return items;
+		}
+	}
 
 	provideGlobalCompletionItems(TokenIntellisenseProvider, document, pos, cancel, ctx, term) {
 		let func_match = term.match(REGEXP_FUNC_COMPLETIONS);
@@ -986,6 +1004,9 @@ class TokenIntellisenseProvider {
 			let func_ctx = func_match[1];
 			let func_name = func_match[2];
 			let func_call = func_match[3];
+
+			let items = TokenIntellisenseProvider.provideGlobalTableCompletionItems(TokenIntellisenseProvider, func_name, func_call);
+			if (items) return;
 		
 			// Check for hook definitions first
 			if (func_call === ":" || (func_call === "." && func_ctx === "function")) {

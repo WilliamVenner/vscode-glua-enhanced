@@ -369,21 +369,8 @@ class CompletionProvider {
 
 			if (func_call) {
 				// Check global tables
-				let globalTableKeys = term.trim().replace(/:/g, ".").split(".");
-				if (globalTableKeys.length > 1) {
-					let found = false;
-					let items = func_call === ":" ? CompletionProvider.GLua.TokenIntellisenseProvider.compiledTokenData.completions.globalFunctions : CompletionProvider.GLua.TokenIntellisenseProvider.compiledTokenData.completions.globals;
-					for (let i = 0; i < globalTableKeys.length; i++) {
-						let globalKey = globalTableKeys[i];
-						if (globalKey in items.subitems) {
-							items = items.subitems[globalKey];
-							found = true;
-						} else if (i !== globalTableKeys.length-1) {
-							found = false; break;
-						}
-					}
-					if (found) return items;
-				}
+				let items = CompletionProvider.GLua.TokenIntellisenseProvider.provideGlobalTableCompletionItems(CompletionProvider.GLua.TokenIntellisenseProvider, func_name, func_call);
+				if (items) return items;
 			}
 
 			if (func_call === ":") {
