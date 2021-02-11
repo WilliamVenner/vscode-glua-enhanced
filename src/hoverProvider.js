@@ -1,7 +1,8 @@
 const vscode = require("vscode");
 const { TokenAnalyzer } = require("./gluaparse");
 
-const REGEXP_ASCII_HOVER = /(?:\\\d+)+/g;
+// (?:\\(?:(\\)|(")|(')|([bfv0rnt])|(x?\d+)))|([^\\]+)
+const REGEXP_ASCII_HOVER = /(?:\\x?\d+)+/g;
 const REGEXP_LUA_STR = /(?:("|')((?:\\\1|\\\\|.)*?)\1)|(?:\[(=*)\[([\s\S]*?)\]\3\])/g;
 const INVALID_ESCAPE_SEQUENCE_HOVER = new vscode.MarkdownString("`invalid escape sequence`");
 
@@ -136,7 +137,7 @@ class HoverProvider {
 			try {
 				let ascii_range = new vscode.Range(line.lineNumber, match.index, line.lineNumber, match.index + match[0].length);
 				if (ascii_range.contains(pos)) {
-					let bytes = String.fromCharCode(...match[0].split("\\"));
+					let bytes = String.fromCharCode(...match[0].split("\\").map(char => char.substr(0,1) === 'x' ? char.substr(1) : char));
 					return new vscode.Hover(new vscode.MarkdownString().appendCodeblock(bytes, "glua"), ascii_range);
 				}
 			} catch(e) {}
