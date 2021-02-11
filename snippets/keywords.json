@@ -155,5 +155,10 @@
 		"prefix": "self",
 		"body": "self",
 		"description": "(Keyword) self"
+	},
+	"Keyword - end": {
+		"prefix": "end",
+		"body": "end",
+		"description": "(Keyword) end"
 	}
 }
