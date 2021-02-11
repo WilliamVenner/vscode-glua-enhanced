@@ -150,5 +150,10 @@
 		"prefix": "_VERSION",
 		"body": "_VERSION $0",
 		"description": "(Keyword) _VERSION"
+	},
+	"Keyword - self": {
+		"prefix": "self",
+		"body": "self",
+		"description": "(Keyword) self"
 	}
 }
