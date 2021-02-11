@@ -4,6 +4,7 @@
 !resources/
 !syntaxes/
 !src/
+!snippets/
 !README.md
 !package.json
 !LICENSE
