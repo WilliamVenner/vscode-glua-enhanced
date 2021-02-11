@@ -1,0 +1,154 @@
+{
+	"Keyword - then": {
+		"prefix": "then",
+		"body": [
+			"then",
+			"\t$0",
+			"end"
+		],
+		"description": "(Keyword) then"
+	},
+	"Keyword - do": {
+		"prefix": "do",
+		"body": [
+			"do",
+			"\t$0",
+			"end"
+		],
+		"description": "(Keyword) do"
+	},
+	"Keyword - for": {
+		"prefix": "for",
+		"body": "for $0",
+		"description": "(Keyword) for"
+	},
+	"Keyword - in": {
+		"prefix": "in",
+		"body": "in $0",
+		"description": "(Keyword) in"
+	},
+	"Keyword - goto": {
+		"prefix": "goto",
+		"body": "goto ${1:block}",
+		"description": "(Keyword) goto"
+	},
+	"Keyword - goto block": {
+		"prefix": "::",
+		"body": "::${1:block}::",
+		"description": "(Keyword) goto block"
+	},
+	"Keyword - if": {
+		"prefix": "if",
+		"body": [
+			"if (${1:condition}) then",
+			"\t$0",
+			"end"
+		],
+		"description": "(Keyword) if"
+	},
+	"Keyword - elseif": {
+		"prefix": "elseif",
+		"body": [
+			"elseif (${1:condition}) then",
+			"\t$0",
+			"end"
+		],
+		"description": "(Keyword) elseif"
+	},
+	"Keyword - else": {
+		"prefix": "elseif",
+		"body": [
+			"else",
+			"\t$0",
+			"end"
+		],
+		"description": "(Keyword) else"
+	},
+	"Keyword - while": {
+		"prefix": "while",
+		"body": [
+			"while (${1:condition}) do",
+			"\t$0",
+			"end"
+		],
+		"description": "(Keyword) while"
+	},
+	"Keyword - repeat": {
+		"prefix": "repeat",
+		"body": [
+			"repeat",
+			"\t$0",
+			"until (${1:condition})"
+		],
+		"description": "(Keyword) repeat"
+	},
+	"Keyword - continue": {
+		"prefix": "continue",
+		"body": "continue $0",
+		"description": "(Keyword) continue"
+	},
+	"Keyword - break": {
+		"prefix": "break",
+		"body": "break $0",
+		"description": "(Keyword) break"
+	},
+	"Keyword - return": {
+		"prefix": "return",
+		"body": "return $0",
+		"description": "(Keyword) return"
+	},
+	"Keyword - or": {
+		"prefix": "or",
+		"body": "or $0",
+		"description": "(Keyword) or"
+	},
+	"Keyword - and": {
+		"prefix": "and",
+		"body": "and $0",
+		"description": "(Keyword) and"
+	},
+	"Keyword - local": {
+		"prefix": "local",
+		"body": "local $0",
+		"description": "(Keyword) local"
+	},
+	"Keyword - function": {
+		"prefix": "function",
+		"body": [
+			"function ${1:foo}(${2:arguments})",
+			"\t$0",
+			"end"
+		],
+		"description": "(Keyword) function"
+	},
+	"Keyword - true": {
+		"prefix": "true",
+		"body": "true $0",
+		"description": "(Keyword) true"
+	},
+	"Keyword - false": {
+		"prefix": "false",
+		"body": "false $0",
+		"description": "(Keyword) false"
+	},
+	"Keyword - nil": {
+		"prefix": "nil",
+		"body": "nil $0",
+		"description": "(Keyword) nil"
+	},
+	"Keyword - NULL": {
+		"prefix": "NULL",
+		"body": "NULL $0",
+		"description": "(Keyword) NULL"
+	},
+	"Keyword - _G": {
+		"prefix": "_G",
+		"body": "_G $0",
+		"description": "(Keyword) _G"
+	},
+	"Keyword - _VERSION": {
+		"prefix": "_VERSION",
+		"body": "_VERSION $0",
+		"description": "(Keyword) _VERSION"
+	}
+}

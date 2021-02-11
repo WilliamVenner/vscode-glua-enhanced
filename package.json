@@ -27,6 +27,12 @@
 		"onLanguage:glua"
 	],
 	"contributes": {
+		"snippets": [
+			{
+				"language": "glua",
+				"path": "./snippets/keywords.json"
+			}
+		],
 		"languages": [
 			{
 				"id": "glua",
