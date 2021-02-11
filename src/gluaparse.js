@@ -148,10 +148,10 @@ class TokenAnalyzer {
 		if ("expression" in token) {
 			return TokenAnalyzer.getFullFunctionCallDiscover(token.expression.base, func_call);
 		} else {
-			if ("identifier" in token) {
+			if ("identifier" in token && token.identifier) {
 				func_call.push(token.identifier.name);
 				if (token.indexer) func_call.push(token.indexer);
-			} else if ("name" in token) {
+			} else if ("name" in token && token.name) {
 				func_call.push(token.name);
 				if (token.indexer) func_call.push(token.indexer);
 			}

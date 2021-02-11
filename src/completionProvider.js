@@ -87,7 +87,7 @@ class CompletionProvider {
 			global: new vscode.CompletionList(undefined, true),       // globals only
 			panel: new vscode.CompletionList(undefined, true),        // panels only
 			functionDecl: new vscode.CompletionList(undefined, true), // Structs and hook families only
-			metaFunc: new vscode.CompletionList(undefined, true),     // meta:Functions() only, but also include hooks here
+			metaFunc: new vscode.CompletionList(),                    // meta:Functions() only, but also include hooks here
 			hook: new vscode.CompletionList(),                        // hooks only
 			enumFamily: {},                                           // enum autocompletion during function signature
 			enumFamilySub: {},                                        // enum autocompletion when typing ENUM.<sub>
