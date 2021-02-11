@@ -759,6 +759,8 @@ class GLuaParser {
 		if (parsed) {
 			let tokenRefs = parsed.LIST;
 			let tokenSearch = parsed.LINES;
+
+			if (!tokenSearch.MIN) return;
 			
 			let tokenSearchStart = pos.line;
 			while (!tokenSearch.LIST[tokenSearchStart]) {
