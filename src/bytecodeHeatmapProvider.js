@@ -14,6 +14,10 @@ function round2(n) {
 	return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+function easeIn(x) {
+	return 1 - Math.sqrt(1 - x);
+}
+
 const LUAJIT_BYTECODE_URL = "http://wiki.luajit.org/Bytecode-2.0";
 const CLOSURE_URL = "https://www.lua.org/pil/6.1.html";
 
@@ -81,7 +85,7 @@ class BytecodeHeatmapProvider {
 							let posLineEnd = new vscode.Position(line-1, docLine.text.length);
 							let heat = weight / maxHeat;
 							decorations.push({
-								renderOptions: { before: { opacity: String(heat / 2) } },
+								renderOptions: { before: { opacity: String(easeIn(heat) / 2) } },
 								range: new vscode.Range(pos, posLineEnd),
 								hoverMessage: new vscode.MarkdownString("Bytecode Weight: " + round2(weight) + " (File Max: " + round2(maxHeat) + ")\n\nHeat: " + round2(heat * 100) + "%" + "\n\n" + opCodeTable)
 							});
