@@ -6,7 +6,9 @@ var shown_proposed_api_error = false;
 
 module.exports = ['glua-enhanced.optimizeGlobalsWorkspace', function() {
 	vscode.window.showInformationMessage("How would you like to localize global calls?\n\nGreedy: local net_Start = net.Start\nLazy: local net = net\n\nLua functions cannot have more than 60 upvalues (locals) in their scope. \"Greedy\" may cause this error in particularly large files.", { modal: true },"Greedy", "Lazy").then(opt => {
+		if (!opt) return;
 		vscode.window.showInformationMessage("What files would you like to optimize the global calls of?", { modal: true },"Entire Workspace", "Open Files", "Closed Files").then(filter => {
+			if (!opt) return;
 			new Promise(resolve => {
 				if (filter !== "Open Files") {
 					vscode.workspace.findFiles("**/*.lua").then(results => {
