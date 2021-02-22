@@ -219,34 +219,34 @@ class CompletionProvider {
 	}
 
 	provideScopedCompletionItems(CompletionProvider, document, pos, cancel, ctx, term) {
+		let chunk = CompletionProvider.GLua.GLuaParser.findChunkAt(document, pos);
+		if (!chunk) return;
+
 		let scopedCompletions = new vscode.CompletionList();
 
-		let chunk = CompletionProvider.GLua.GLuaParser.findChunkAt(document, pos);
-		if (chunk) {
-			let visited = new Map();
-			var token = chunk;
-			while (token) {
-				if (!visited.has(token)) {
-					visited.set(token, true);
+		let visited = new Map();
+		var token = chunk;
+		while (token) {
+			if (!visited.has(token)) {
+				visited.set(token, true);
 
-					if ("scope" in token) {
-						for (let name in token.scope) {
-							let scopeToken = token.scope[name];
-							if ((new vscode.Position(scopeToken.loc.end.line-1, scopeToken.loc.end.column)).isAfter(pos)) continue;
+				if ("scope" in token) {
+					for (let name in token.scope) {
+						let scopeToken = token.scope[name];
+						if ((new vscode.Position(scopeToken.loc.end.line-1, scopeToken.loc.end.column)).isAfter(pos)) continue;
 
-							let kind = scopeToken.type === "FunctionDeclaration" ? vscode.CompletionItemKind.Function : vscode.CompletionItemKind.Variable;
-							if (visited.has(scopeToken) && visited.get(scopeToken) === kind) continue; visited.set(scopeToken, kind);
+						let kind = scopeToken.type === "FunctionDeclaration" ? vscode.CompletionItemKind.Function : vscode.CompletionItemKind.Variable;
+						if (visited.has(scopeToken) && visited.get(scopeToken) === kind) continue; visited.set(scopeToken, kind);
 
-							let completionItem = new vscode.CompletionItem(name, kind);
-							completionItem.DOC_TAG = false;
-							scopedCompletions.items.push(completionItem);
-						}
+						let completionItem = new vscode.CompletionItem(name, kind);
+						completionItem.DOC_TAG = false;
+						scopedCompletions.items.push(completionItem);
 					}
 				}
-
-				if ("parent" in token) token = token.parent;
-				else break;
 			}
+
+			if ("parent" in token) token = token.parent;
+			else break;
 		}
 
 		if (scopedCompletions.items.length > 0) return scopedCompletions;
