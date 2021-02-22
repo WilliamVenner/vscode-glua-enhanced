@@ -153,7 +153,7 @@ class SignatureProvider {
 
 		if (signatures.length > 0) {
 			if (callback) {
-				let activeParam = signatures[0].parameters[activeCallbackParameter];
+				let activeParam = signatures[0].parameters[activeParameter];
 				if ("CALLBACK_SIGNATURES" in activeParam) {
 					return activeParam.CALLBACK_SIGNATURES;
 				}
