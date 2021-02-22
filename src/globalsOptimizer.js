@@ -4,9 +4,13 @@ const { TokenAnalyzer } = require("./gluaparse.js");
 // FIXME spamming causes duplicates until file is parsed again
 // FIXME it's faster for the interpreter to put upvalues nearer to where they're needed, so instead of putting them all at the top of the file, we should be putting them in the chunks they get referenced in
 
-const identifierExtractor = (token, callback_data) => {
+const greedyIdentifierExtractor = (token, callback_data) => {
 	if (token.isLocal || ("base" in token && "indexer" in token.base && token.base.indexer === ":")) return false;
 	if (token.DOC) callback_data.push(token.DOC);
+};
+
+const lazyIdentifierExtractor = token => {
+	if (token.isLocal || ("base" in token && "indexer" in token.base && token.base.indexer === ":")) return false;
 };
 
 const RE_REPLACE_DOT = /\./g;
@@ -48,17 +52,13 @@ function get_realm(DOCS) {
 }
 
 class GlobalsOptimizer {
-	static optimize(_, file, tokens, workspaceEdit) {
+	static optimize(greedy, file, tokens, workspaceEdit) {
 		return new Promise(resolve => {
-			console.log(tokens.LINES.MIN);
-			console.log(tokens.LIST[1].loc.start.line-1);
 			let insert_whitespace = tokens.LIST.length > 0 && "MIN" in tokens.LINES && tokens.LIST[1].loc.start.line-1 === tokens.LINES.MIN;
 			let preoptimized = {};
 			let optimize = {};
 
 			let realms = {};
-			let client_realm = false; // Only do local x = CLIENT|SERVER and x if we're mixing realms in this file
-			let server_realm = false;
 			
 			if ("LocalStatement" in tokens.TYPES) {
 				for (let i = 0; i < tokens.TYPES.LocalStatement.LIST.length; i++) {
@@ -89,24 +89,22 @@ class GlobalsOptimizer {
 
 					if (!("base" in CallExpression)) continue;
 
-					let [full_call, callback_data] = TokenAnalyzer.getFullFunctionCall(CallExpression, identifierExtractor);
+					let [full_call, callback_data] = TokenAnalyzer.getFullFunctionCall(CallExpression, greedy ? greedyIdentifierExtractor : lazyIdentifierExtractor);
 					if (!full_call) continue;
+					let global = full_call.join("");
 
-					if (callback_data.length === 0) {
-						// No wiki documentation found
-						// Only optimize if this is referencing an independent global function (i.e. NOT table.global())
-						// Otherwise, it can cause errors
-						if (CallExpression.base.type !== "Identifier" || !("name" in CallExpression.base)) continue;
-						if (!(CallExpression.base.name in optimize)) optimize[CallExpression.base.name] = [];
+					if (!greedy || callback_data.length === 0) {
+						// Lazy, or no wiki documentation was found, only optimize the first global lookup in a member expression (if applicable)
+						// i.e. GAS.Config -> local GAS = GAS
 
 						// Push replacement range to optimizables
-						optimize[CallExpression.base.name].push(TokenAnalyzer.getTokenRange(CallExpression.base));
+						if (!(full_call[0] in optimize)) optimize[full_call[0]] = [];
+						optimize[full_call[0]].push(TokenAnalyzer.getTokenRange(CallExpression.base));
 					} else {
 						// DEFINE_BASECLASS is the ONLY preprocessor statement in Garry's Mod, we have to skip it or it causes invalid syntax!
 						if (full_call.length === 1 && full_call[0] === "DEFINE_BASECLASS") continue;
 
 						// Wiki documentation found, we can optimize this
-						let global = full_call.join("");
 						if (!(global in optimize)) optimize[global] = [];
 
 						// Push realm if we're a member expression
@@ -175,7 +173,7 @@ class GlobalsOptimizer {
 		});
 	}
 
-	static optimizeBulk(GLua, files) {
+	static optimizeBulk(GLua, files, greedy) {
 		vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
 			title: "Optimizing globals",
@@ -194,7 +192,7 @@ class GlobalsOptimizer {
 				if (file.fsPath in GLua.GLuaParser.parsedFiles) {
 					progress.report(incrementObj);
 					parseQueue.push(new Promise(resolve => {
-						GlobalsOptimizer.optimize(GLua, file, GLua.GLuaParser.parsedFiles[file.fsPath], workspaceEdit).then(() => {
+						GlobalsOptimizer.optimize(greedy, file, GLua.GLuaParser.parsedFiles[file.fsPath], workspaceEdit).then(() => {
 							progress.report(incrementObj);
 							resolve();
 						});
@@ -203,7 +201,7 @@ class GlobalsOptimizer {
 					parseQueue.push(new Promise(resolve => {
 						GLua.GLuaParser.parseFile(file).then(tokens => {
 							progress.report(incrementObj);
-							GlobalsOptimizer.optimize(GLua, file, tokens, workspaceEdit).then(() => {
+							GlobalsOptimizer.optimize(greedy, file, tokens, workspaceEdit).then(() => {
 								progress.report(incrementObj);
 								resolve();
 							});
@@ -220,4 +218,4 @@ class GlobalsOptimizer {
 	}
 }
 
-module.exports = GlobalsOptimizer;
+module.exports = { GlobalsOptimizer };
