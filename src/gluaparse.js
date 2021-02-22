@@ -144,11 +144,13 @@ class TokenAnalyzer {
 	}
 
 	// https://i.venner.io/Code_Rgn30adjJU.png
-	static getFullFunctionCallDiscover(token, func_call) {
+	static getFullFunctionCallDiscover(token, func_call, callback, callback_data) {
+		if (callback && callback(token, callback_data) === false) return false;
 		if ("expression" in token) {
-			return TokenAnalyzer.getFullFunctionCallDiscover(token.expression.base, func_call);
+			return TokenAnalyzer.getFullFunctionCallDiscover(token.expression.base, func_call, callback, callback_data);
 		} else {
 			if ("identifier" in token && token.identifier) {
+				if (callback && callback(token.identifier, callback_data) === false) return false;
 				func_call.push(token.identifier.name);
 				if (token.indexer) func_call.push(token.indexer);
 			} else if ("name" in token && token.name) {
@@ -156,14 +158,16 @@ class TokenAnalyzer {
 				if (token.indexer) func_call.push(token.indexer);
 			}
 			
-			if ("base" in token) TokenAnalyzer.getFullFunctionCallDiscover(token.base, func_call);
+			if ("base" in token && TokenAnalyzer.getFullFunctionCallDiscover(token.base, func_call, callback, callback_data) == false) return false;
 
 			return func_call;
 		}
 	}
 
-	static getFullFunctionCall(token) {
-		return TokenAnalyzer.getFullFunctionCallDiscover(token, []).reverse();
+	static getFullFunctionCall(token, callback) {
+		let callback_data = callback && [];
+		let full_call = TokenAnalyzer.getFullFunctionCallDiscover(token, [], callback, callback_data);
+		return callback ? [full_call ? full_call.reverse() : full_call, callback_data] : full_call.reverse();
 	}
 
 	static getFunctionArguments(token) {

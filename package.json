@@ -84,6 +84,16 @@
 				"command": "glua-enhanced.bytecodeHeatmap",
 				"title": "Generate Bytecode Heatmap",
 				"category": "GLua Enhanced"
+			},
+			{
+				"command": "glua-enhanced.optimizeGlobals",
+				"title": "Localize Global Calls",
+				"category": "GLua Enhanced"
+			},
+			{
+				"command": "glua-enhanced.optimizeGlobalsWorkspace",
+				"title": "Localize Global Calls (Workspace)",
+				"category": "GLua Enhanced"
 			}
 		]
 	},
