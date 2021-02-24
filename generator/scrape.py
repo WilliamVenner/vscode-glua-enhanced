@@ -296,7 +296,9 @@ class WikiParser:
 
 		# Library/Class
 		summary_elem = CSSSelector("summary")(body)
-		if len(summary_elem) > 0: self.add_item_content_def(summary_elem[0], lib_def)
+		if len(summary_elem) > 0:
+			self.add_item_content_def(summary_elem[0], lib_def)
+			return
 
 	def parse_hook(self, url, hook_def):
 		body = self.get_wiki_page_markup(url)
@@ -384,13 +386,13 @@ class WikiParser:
 			self.add_wiki_link(subcategory_def, child, name)
 			parsed[name] = subcategory_def
 
-			link = CSSSelector(":scope > summary > a.cm")(child)
+			link = CSSSelector(":scope > summary > a")(child)
 			if link:
-				self.queue_page_parse(self.parse_library, link[0].attrib["href"], subcategory_def)
+				if "href" in link[0].attrib: self.queue_page_parse(self.parse_library, link[0].attrib["href"], subcategory_def)
 				self.parse_subcategories(subcategory_def, child, deprecated="depr" in child.classes)
 			else:
 				link = CSSSelector("a.cm")(child)
-				if link: self.queue_page_parse(self.parse_library, link[0].attrib["href"], subcategory_def)
+				for item in link: self.queue_page_parse(self.parse_library, item.attrib["href"], subcategory_def)
 
 	def parse_subcategories(self, parent_def, subcategory, deprecated=False):
 		sel_category_list = CSSSelector(":scope > details")
@@ -494,14 +496,19 @@ class WikiParser:
 			name = div.text_content().strip()
 			
 			if name == "Globals":
+				print("=========== Globals ===========")
 				self.parse_globals("GLOBALS", sel_category_list(category))
 			elif name == "Structs":
+				print("=========== Structs ===========")
 				self.parse_struct_category(sel_category_list(category))
 			elif name == "Panels":
+				print("=========== Panels ===========")
 				self.parse_subcategory(category, self.PARSED["PANELS"], sel_category_items(category) + CSSSelector(":scope > ul > li > a.cm")(category))
 			elif name == "Classes":
+				print("=========== Classes ===========")
 				self.parse_subcategory(category, self.PARSED["CLASSES"], sel_category_items(category))
 			elif name == "Libraries":
+				print("=========== Libraries ===========")
 				self.parse_subcategory(category, self.PARSED["LIBRARIES"], sel_category_items(category))
 		
 		# Process queue
