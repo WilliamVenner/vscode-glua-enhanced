@@ -1,5 +1,4 @@
 from scrape import scrape
-# from syntax import syntax
 from gluadump import gluadump
 
 import os, os.path
@@ -51,8 +50,6 @@ def main():
 	
 	if wiki_scrape != None:
 		gluadump(wiki_scrape)
-
-		#write_tmLanguage(syntax(wiki_scrape))
 		
 		f = open("scrape/scrape.json", "w", encoding="utf-8")
 		f.write(json.dumps(wiki_scrape))
