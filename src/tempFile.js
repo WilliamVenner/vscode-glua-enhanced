@@ -39,6 +39,7 @@ const TMP_DIR = (function() {
 
 class TempFile {
 	static getTempPath(name) {
+		if (!TMP_DIR) return null;
 		return path.join(TMP_DIR, "glua-enhanced", name);
 	}
 
@@ -66,6 +67,9 @@ class TempFile {
 							resolve([ tmpPath, fd, () => fs.close(fd), () => { fs.close(fd); this.dispose() } ]);
 						}
 					});
+				} else if (this.contents === 0) {
+					// Return a write stream
+					resolve(fs.createWriteStream(tmpPath));
 				} else {
 					fs.writeFile(tmpPath, this.contents, { encoding: "utf-8" }, (err) => {
 						delete this.contents;
