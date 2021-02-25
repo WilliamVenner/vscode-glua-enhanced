@@ -6,9 +6,29 @@
 
 Supercharge your Garry's Mod development experience!
 
-**GLua Enhanced is currently in BETA and may have missing features and bugs.**
+# Media
 
-**BETA: Syntax highlighting is currently not up-to-date with the wiki**
+<details><summary>Click!</summary>
+
+![](https://i.imgur.com/AklgD6Z.gif)
+
+![](https://i.imgur.com/RzRw1PP.gif)
+
+![](https://i.imgur.com/tPCzNIv.gif)
+
+![](https://i.imgur.com/qoFhgWa.png)
+
+![](https://i.imgur.com/OCb740O.png)
+
+![](https://i.imgur.com/4PEOp4C.png)
+
+![](https://i.imgur.com/EoB99zZ.png)
+
+![](https://i.imgur.com/QRKMSh8.png)
+
+![](https://i.imgur.com/X19jxT0.png)
+
+</details>
 
 ## Features
 
@@ -16,7 +36,7 @@ Supercharge your Garry's Mod development experience!
 * Client/Server/Menu flags
 * ![](https://i.imgur.com/2SlS4Gc.png) flags
 * Colour palette for `Color()`
-* Notes, Warnings, Bugs, imported from wiki
+* Notes, Warnings, Bugs, etcc. imported from wiki
 * Function argument names, types and descriptions shown as you type
 * Function enum arguments autocompletion
 * File icons for `.lua`, `.vmt`, `.vtf`, `.mdl`, `*.vtx`, `.vvd`, `.phy`
@@ -36,10 +56,26 @@ Supercharge your Garry's Mod development experience!
 * Hover to decode Lua ASCII byte sequences
 * Locals & globals autocompletion
 * Global table autocompletion
-* Workspace globals scanner
-* Bytecode heatmap & inspection tool (credits: [Spar](https://github.com/GitSparTV))
+* See definitions of functions defined in the [Garry's Mod Lua repository](https://github.com/Facepunch/garrysmod)
+* Jump to global and local definitions
 
-(and way more features I have not actually listed at the moment!)
+_And way more that I can't really be bothered to list because there are just too many :D_
+
+### Workspace Globals Scanner
+
+![](https://i.imgur.com/h9bRE4T.png)
+
+### Global Calls Optimizer
+
+![](https://i.imgur.com/o45kMdL.png)
+
+### Bytecode Heatmap Generator
+
+Generates a (very, VERY approximate) "heatmap" of how heavy some parts of your code are, and allows you to inspect what bytecode is being generated and where.
+
+![](https://i.imgur.com/Z19qm3W.png)
+
+Credits: [Spar](https://github.com/GitSparTV)
 
 ## Common Issues
 
@@ -51,10 +87,6 @@ Click the Gear icon in the bottom left of VSCode, click "File Icon Theme" and th
 
 Press `CTRL + Space`
 
-#### _Where did my textual autocompletions go? Your extension broke them!_
-
-[No it didn't](https://github.com/microsoft/vscode/issues/21611), see [Recommended Companion Extensions](https://github.com/williamvenner/vscode-glua-enhanced#recommended-companion-extensions)
-
 #### I'm not seeing globals or local variables
 
 You may have the `editor.quickSuggestions` setting set to `false`.
@@ -65,17 +97,9 @@ Please [open an issue](https://github.com/WilliamVenner/vscode-glua-enhanced/iss
 
 ## Recommended Companion Extensions
 
-### [All Autocomplete](https://marketplace.visualstudio.com/items?itemName=Atishay-Jain.All-Autocomplete)
+### [glualint](https://marketplace.visualstudio.com/items?itemName=goz3rr.vscode-glualint)
 
-Mixes textual autocompletions and extension-provided autocompletions, and also includes textual autocompletions from all files in your workspace.
-
-## Media
-
-soon™
-
-## Wiki Integration
-
-_\[Placeholder\]_
+A GLua linter, powered by [FPtje's glualint](https://github.com/FPtje/GLuaFixer).
 
 ## gluadump
 
@@ -83,7 +107,7 @@ This extension uses the [gluadump](https://github.com/WilliamVenner/gluadump) ad
 
 ## Credits
 
-[lua.tmLanguage](https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/syntaxes/lua.tmLanguage) structure taken from [FPtje/Sublime-GLua-Highlight](https://github.com/FPtje/Sublime-GLua-Highlight/)
+[lua.tmLanguage](https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/syntaxes/lua.tmLanguage) taken from [FPtje/Sublime-GLua-Highlight](https://github.com/FPtje/Sublime-GLua-Highlight/)
 
 Bytecode heatmap generator written by [Spar](https://github.com/GitSparTV) for [LLLua](https://github.com/GitSparTV/LLLua/)
 
