@@ -105,7 +105,7 @@ class WikiProvider {
 		return new vscode.MarkdownString(this.resolveWikiLinks(this.stripCodeFormatting(markdown.join("\n\n"))), true);
 	}
 
-	resolveCompletionItem(item) {
+	resolveCompletionItem(item, cancel) {
 		if ("DOC_TAG" in item && item.DOC_TAG === false) return;
 
 		let doc;
@@ -124,15 +124,7 @@ class WikiProvider {
 			}
 
 			if ("VMT" in doc) {
-				return new Promise((resolve, reject) => {
-					vscode.workspace.fs.readFile(doc["VMT"]).then((contents) => {
-						try {
-							var str = String.fromCharCode.apply(null, contents);
-							item.documentation = new vscode.MarkdownString("```json\n" + str.replace(/(`|\\)/g, "\\$1") + "\n```");
-							resolve(item);
-						} catch(err) { reject() }
-					}, reject);
-				});
+				return this.GLua.VMTProvider.provideVMT(cancel, item, doc["VMT"]);
 			}
 
 			item.documentation = this.resolveDocumentation(doc, item.label);

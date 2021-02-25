@@ -106,7 +106,9 @@
 		"follow-redirects": "^1.13.1",
 		"gluaparse": "git+https://github.com/WilliamVenner/glua.js.git",
 		"markdown-escape": "^1.1.0",
-		"md5": "^2.3.0"
+		"md5": "^2.3.0",
+		"pngjs": "^6.0.0",
+		"vtflib": "^1.0.1"
 	},
 	"devDependencies": {
 		"vsce": "^1.83.0",

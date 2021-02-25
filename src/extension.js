@@ -12,6 +12,7 @@ const Commands = require("./commands");
 const TempFile = require("./tempFile");
 const BytecodeHeatmapProvider = require("./bytecodeHeatmapProvider");
 const ReferenceProvider = require("./referenceProvider");
+const VMTProvider = require("./vmtProvider");
 
 class GLua {
 	constructor(extension) {
@@ -30,6 +31,7 @@ class GLua {
 		new ColorProvider(this);
 		new TypesProvider(this);
 		new DefinitionProvider(this);
+		new VMTProvider(this);
 		new BytecodeHeatmapProvider(this);
 		new Commands(this);
 

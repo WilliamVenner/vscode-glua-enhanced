@@ -112,4 +112,6 @@ This extension uses the [gluadump](https://github.com/WilliamVenner/gluadump) ad
 
 Bytecode heatmap generator written by [Spar](https://github.com/GitSparTV) for [LLLua](https://github.com/GitSparTV/LLLua/)
 
+[vtflib.js](https://github.com/meepen/vtflib.js) by [Meepen](https://github.com/meepen)
+
 [gluac](https://github.com/everyday-as/gluac) made by Matt Stevens (MIT License)
