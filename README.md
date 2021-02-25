@@ -32,6 +32,7 @@ Supercharge your Garry's Mod development experience!
 
 ## Features
 
+* Syntax highlighting
 * Auto completion & wiki integration for almost everything in Garry's Mod
 * Client/Server/Menu flags
 * ![](https://i.imgur.com/2SlS4Gc.png) flags

@@ -109,8 +109,20 @@ class DefinitionProvider {
 			switch(token.type) {
 				case "MemberExpression":
 				case "Identifier":
-					var [func_call, range] = TokenAnalyzer.qualifyMemberExpression(token, pos, true);
-					promises.push(this.getDefinitions(func_call, token, pos.line, range));
+					var [func_call, range, base] = TokenAnalyzer.qualifyMemberExpression(token, pos, true);
+					// No, it's VSCode that ignores the range returned here if multiple definitions are provided, it's not a bug on our end
+					
+					let isLocal = false;
+					while ("base" in base) {
+						if ("isLocal" in base && base.isLocal) {
+							isLocal = true;
+							break;
+						}
+						if ("base" in base.base) base = base.base;
+						else break;
+					}
+					
+					promises.push(this.getDefinitions(func_call, token, isLocal ? pos.line : undefined, range));
 					break;
 
 				case "StringLiteral":
