@@ -158,7 +158,7 @@ class TokenAnalyzer {
 				if (token.indexer) func_call.push(token.indexer);
 			}
 			
-			if ("base" in token && TokenAnalyzer.getFullFunctionCallDiscover(token.base, func_call, callback, callback_data) == false) return false;
+			if ("base" in token && TokenAnalyzer.getFullFunctionCallDiscover(token.base, func_call, callback, callback_data) === false) return false;
 
 			return func_call;
 		}
