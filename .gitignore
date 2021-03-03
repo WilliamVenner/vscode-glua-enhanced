@@ -9,3 +9,4 @@ node_modules/
 __pycache__/
 *.vsix
 dist/
+publish-vsx.bat
