@@ -1,5 +1,6 @@
 const vscode = require("vscode");
 const escape = require("markdown-escape");
+const https = require('https');
 
 const WIKI_URL = "https://wiki.facepunch.com/gmod/";
 const GITHUB_URL = "https://github.com/Facepunch/garrysmod/blob/master/garrysmod/";
@@ -15,6 +16,39 @@ class WikiProvider {
 
 	static getSrcGitHubURL(src, raw) {
 		return (raw ? GITHUB_URL_RAW : GITHUB_URL) + src[0] + "#" + (src[1].split("-").map((line) => "L" + line).join("-"));
+	}
+
+	downloadWiki() {
+		const curTime = new Date().getTime();
+		if (curTime - this.GLua.extension.globalState.get("vscode-glua-enhanced-wiki-date", curTime) < 86400000) return;
+
+		this.GLua.downloadingMsg = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+		this.GLua.downloadingMsg.text = "$(cloud-download) Downloading Gmod Wiki";
+		this.GLua.downloadingMsg.show();
+
+		https.get('https://venner.io/gmod-wiki.json', stream => {
+			let data = '';
+			stream.on('data', chunk => data += chunk);
+			stream.on('end', () => {
+				data = JSON.parse(data);
+				if (data) {
+					this.GLua.extension.globalState.update("vscode-glua-enhanced-wiki-date", Math.round(new Date().getTime()));
+					this.GLua.extension.globalState.update("vscode-glua-enhanced-wiki-data", data);
+
+					// Sucks, but it's JavaScript, who cares?! :-)
+					for (let k in this.wiki) delete this.wiki[k];
+					for (let k in data) this.wiki[k] = data[k];
+					for (let k in this.docs) delete this.docs[k];
+
+					this.GLua.CompletionProvider.createCompletionItems();
+				}
+
+				if (this.GLua.downloadingMsg) {
+					this.GLua.downloadingMsg.dispose();
+					this.GLua.downloadingMsg = undefined;
+				}
+			});
+		});
 	}
 
 	getRealmIcon(client, menu, server) {
@@ -159,7 +193,10 @@ class WikiProvider {
 		this.getLabelIcon("predicted");
 		this.getLabelIcon("networkvar");
 
-		this.wiki = require("../resources/wiki.json");
+		const storedWikiData = this.GLua.extension.globalState.get("vscode-glua-enhanced-wiki-data");
+		this.wiki = storedWikiData ?? require("../resources/wiki.json");
+		this.downloadWiki();
+
 		this.docs = {};
 	}
 }

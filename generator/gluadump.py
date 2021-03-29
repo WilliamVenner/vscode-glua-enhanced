@@ -3,7 +3,7 @@
 import json
 
 def gluadump(wiki_scrape):
-	f = open("gluadump.json", "r") # https://github.com/WilliamVenner/gluadump
+	f = open("gluadump.json", "r", encoding="utf-8", errors="replace") # https://github.com/WilliamVenner/gluadump
 	gluadump = json.loads(f.read())
 	f.close()
 
