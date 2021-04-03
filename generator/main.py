@@ -5,36 +5,6 @@ import os, os.path
 import json, re
 import sys
 
-def write_tmLanguage(syntax):
-	if not os.path.isdir("../syntaxes"):
-		os.mkdir("../syntaxes")
-
-	print("Writing to syntaxes/lua.tmLanguage...")
-
-	f = open("template/lua.tmLanguage", "r", encoding="utf-8")
-	template = f.read()
-	f.close()
-
-	i = 0
-
-	f = open("../syntaxes/lua.tmLanguage", "w", encoding="utf-8")
-
-	for match in re.finditer(r"%_(.+?)_%", template):
-		templateID = match.group(1)
-		print("Writing %_{templateID}_%...".format(templateID = templateID))
-		
-		if templateID in syntax:
-			f.write(template[i:match.start()])
-			f.write(syntax[templateID])
-
-			i = match.start() + len(match.group(0))
-		else:
-			print("ERROR: Missing %_{templateID}_%".format(templateID = templateID))
-
-	f.write(template[i:])
-	
-	f.close()
-
 def main():
 	if not os.path.isdir("scrape"):
 		os.mkdir("scrape")

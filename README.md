@@ -108,7 +108,7 @@ This extension uses the [gluadump](https://github.com/WilliamVenner/gluadump) ad
 
 ## Credits
 
-[lua.tmLanguage](https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/syntaxes/lua.tmLanguage) taken from [FPtje/Sublime-GLua-Highlight](https://github.com/FPtje/Sublime-GLua-Highlight/)
+[lua.tmLanguage.json](https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/syntaxes/lua.tmLanguage.json) taken & modified from [sumneko/vscode-lua](https://github.com/sumneko/vscode-lua/)
 
 Bytecode heatmap generator written by [Spar](https://github.com/GitSparTV) for [LLLua](https://github.com/GitSparTV/LLLua/)
 
