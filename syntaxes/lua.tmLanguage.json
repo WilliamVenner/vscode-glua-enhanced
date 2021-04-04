@@ -313,7 +313,7 @@
 		"comment": {
 			"patterns": [
 				{
-					"begin": "(^[ \\t]+)?(?=--)",
+					"begin": "(^[ \\t]+)?(?=--|\/\/)",
 					"beginCaptures": {
 						"1": {
 							"name": "punctuation.whitespace.comment.leading.lua"
@@ -365,6 +365,16 @@
 									"include": "#luadoc"
 								}
 							]
+						},
+						{
+							"begin": "\/\/",
+							"beginCaptures": {
+								"0": {
+									"name": "punctuation.definition.comment.lua"
+								}
+							},
+							"end": "\\n",
+							"name": "comment.line.double-dash.lua"
 						}
 					]
 				},
