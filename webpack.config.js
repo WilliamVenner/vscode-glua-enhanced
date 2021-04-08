@@ -12,6 +12,20 @@ const config = {
 		path: path.resolve(__dirname, "dist"),
 		filename: "extension.bundle.js",
         libraryTarget: 'commonjs2'
+	},
+	module: {
+		rules: [
+			{
+				test: /\.m?js$/,
+				exclude: /node_modules/,
+				use: {
+					loader: "babel-loader",
+					options: {
+						presets: ['@babel/preset-env']
+					}
+				}
+			}
+		]
 	}
 };
 
