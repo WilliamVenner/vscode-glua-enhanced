@@ -553,7 +553,7 @@ class GLuaParser {
 	}
 
 	static isTempGitHubDownload(uri) {
-		if (uri.scheme !== "file") return false;
+		if (uri.scheme === "file") return false;
 		let tmpPath = TempFile.getTempPath("Facepunch/garrysmod");
 		let relPath = path.relative(uri.fsPath, tmpPath);
 		return relPath != tmpPath;
