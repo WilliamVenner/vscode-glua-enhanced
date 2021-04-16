@@ -226,7 +226,10 @@ class WikiParser:
 						link = page.text_content().strip()
 						if link.startswith("Enums/"):
 							arg_def["ENUM"] = link[len("Enums/"):]
-						
+			
+			if "default" in arg.attrib and len(arg.attrib["default"]) > 0:
+				arg_def["DEFAULT"] = arg.attrib["default"]
+			
 			self.add_item_content_def(arg, arg_def)
 
 			if arg_def["TYPE"] == "function" and "DESCRIPTION" in arg_def:
