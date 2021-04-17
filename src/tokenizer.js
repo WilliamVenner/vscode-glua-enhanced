@@ -81,6 +81,7 @@ class Tokenizer {
 					this.openEscape = true;
 				} else if (char == this.openString) {
 					this.openString = false;
+					this.token += "\"";
 					if (this.openShortFuncCall) {
 						this.openParanthesis.pop();
 						this.token = "";
@@ -168,6 +169,7 @@ class Tokenizer {
 							this.functionCallOpen(i);
 						}
 						this.openString = char;
+						this.token += "\"";
 						break;
 				
 					case "(":

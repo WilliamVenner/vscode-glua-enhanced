@@ -99,11 +99,21 @@ class TypesProvider {
 			
 				let tag = "HOOK:GM:" + hook_name;
 				if (tag in this.docs) {
+					const selfArg = token.arguments[1].type !== "StringLiteral" ? {NAME: "self"} : false;
+					
+					let hasHookArguments = false;
 					if (hook_func.parameters.length > 0) {
 						let hookArguments = "ARGUMENTS" in this.docs[tag] && this.docs[tag].ARGUMENTS.length > 0 ? this.docs[tag].ARGUMENTS : undefined;
 						if (hookArguments) {
+							hasHookArguments = true;
+							if (selfArg) {
+								hookArguments = [selfArg, ...hookArguments];
+							}
 							this.addHookParameters(textEditor, hook_func.parameters, hookArguments);
 						}
+					}
+					if (!hasHookArguments && selfArg) {
+						this.addHookParameters(textEditor, hook_func.parameters, [selfArg]);
 					}
 
 					let hookReturns = "RETURNS" in this.docs[tag] && this.docs[tag].RETURNS.length > 0 ? this.docs[tag].RETURNS : undefined;
