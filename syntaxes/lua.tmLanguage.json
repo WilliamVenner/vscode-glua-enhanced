@@ -6,7 +6,7 @@
 			"begin": "\\b(?:(local)\\s+)?(function)\\b",
 			"beginCaptures": {
 				"1": {
-					"name": "keyword.local.lua"
+					"name": "keyword.control.laux"
 				},
 				"2": {
 					"name": "keyword.control.lua"
