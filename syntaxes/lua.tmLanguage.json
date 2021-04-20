@@ -125,7 +125,7 @@
 			"name": "string.tag.lua"
 		},
 		{
-			"match": "\\b(break|do|else|for|if|elseif|goto|return|then|repeat|while|until|end|in)\\b",
+			"match": "\\b(break|do|else|for|if|elseif|goto|return|continue|then|repeat|while|until|end|in)\\b",
 			"name": "keyword.control.lua"
 		},
 		{
