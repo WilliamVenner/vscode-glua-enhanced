@@ -696,7 +696,14 @@ class CompletionProvider {
 				if ("SEARCH" in item_def) {
 					completionItem.DOC_TAG = tag + ":" + item_def["SEARCH"]
 					if (completionItem.DOC_TAG in this.docs) {
-						throw new Error("Duplicate doc search tag! (" + completionItem.DOC_TAG + ")");
+						console.error("Duplicate doc search tag! (" + completionItem.DOC_TAG + ")");
+						console.error(completionItem);
+						try {
+							throw new Error();
+						} catch(e) {
+							console.error(e.stack);
+						}
+						return;
 					}
 					this.docs[completionItem.DOC_TAG] = item_def;
 
@@ -709,6 +716,8 @@ class CompletionProvider {
 	}
 
 	addWikiCompletionItems() {
+		let GM_GAMEMODE = false; // hack fix for annoying GM/GAMEMODE bipolarism from the wiki
+
 		for (const [key, entries] of Object.entries(this.GLua.WikiProvider.wiki)) {
 			switch (key) {
 				case "HOOKS":
@@ -739,9 +748,10 @@ class CompletionProvider {
 							"function " + hook_family
 						));
 						
-						if (hook_family === "GM") {
-							hook_family_def["SEARCH"] = "GAMEMODE"
-							
+						if (hook_family === "GM" && !GM_GAMEMODE) {
+							GM_GAMEMODE = true;
+							hook_family_def["SEARCH"] = hook_family_def["SEARCH"] === "GAMEMODE" ? "GM" : "GAMEMODE";
+
 							this.completions.functionDecl.items.push(this.createCompletionItem(
 								"FUNC_DECL_HOOK",
 								"function GAMEMODE:",
