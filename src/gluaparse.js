@@ -540,6 +540,7 @@ class GLuaParser {
 		this.GLua.GLuaParser = this;
 
 		this.parsedFiles = {};
+		this.parsedAddons = {};
 		this.visibleTextEditors = new Map();
 		this.scanChangesTimeouts = new Map();
 
@@ -581,8 +582,13 @@ class GLuaParser {
 	}
 
 	onDidChangeActiveTextEditor(textEditor) {
-		if (textEditor && !(textEditor.document.uri.fsPath in this.parsedFiles) && GLuaParser.isParseableTextDocument(textEditor.document)) {
-			this.parseText(textEditor.document.uri, textEditor.document.getText());
+		if (textEditor && GLuaParser.isParseableTextDocument(textEditor.document)) {
+			if (!(textEditor.document.uri.fsPath in this.parsedFiles)) {
+				this.parseText(textEditor.document.uri, textEditor.document.getText());
+			}
+			if (this.browsingGmodServer) {
+				this.tryParseServerAddon(textEditor.document.uri.fsPath);
+			}
 		}
 	}
 
@@ -647,40 +653,107 @@ class GLuaParser {
 		}
 	}
 
+	tryParseServerAddon(fsPath, parsePromises, parsedFiles) {
+		// When we're browsing a Gmod server (fsPath: /*/garrysmod/(addons)?$/i),
+		// we want to lazily parse addons other JavaScript will run out of memory (lol I chose the wrong language for this)
+		// We should parse addon folders and gamemode folders that are open.
+		const addonPath = GLuaParser.extractParseableAddon(fsPath);
+		if (addonPath && !(addonPath in this.parsedAddons)) {
+			console.log("Parsing addon " + addonPath);
+			this.parsedAddons[addonPath] = true;
+			return this.parseFolders([vscode.Uri.file(addonPath)], parsePromises, parsedFiles);
+		}
+	}
+
+	static extractParseableAddon(fsPath) {
+		const match = fsPath.match(/(^.*?garrysmod(?:\\|\/)(?:addons|gamemodes)(?:\\|\/)[^\\\/]+).*$/i);
+		return match?.[1];
+	}
+
+	parseFolders(folders, parsePromises, parsedFiles) {
+		var parsedFiles = parsedFiles || this.parsedFiles;
+
+		return Promise.all(folders.map(base => {
+			return new Promise(resolve => {
+				vscode.workspace.findFiles(new vscode.RelativePattern(base, "**/*.lua")).then(results => {
+					for (let i = 0; i < results.length; i++) {
+						const path = results[i];
+						if (path.fsPath in parsedFiles) continue;
+		
+						const promise = this.parseFile(path, parsedFiles);
+						if (parsePromises) {
+							parsePromises.push(promise);
+						}
+					}
+					resolve();
+				});
+			});
+		}));
+	}
+
 	parseWorkspace() {
 		this.parsingWorkspace = true;
 
 		return new Promise((resolve) => {
 			let parsedFiles = {};
 
+			const workspaceFolders = vscode.workspace.workspaceFolders.filter(folder => {
+				if (folder.uri.fsPath.match(/garrysmod(?:(?:\\|\/)addons)?(?:\\|\/)?$/i) || fs.existsSync(vscode.Uri.joinPath(folder.uri, "garrysmod/addons").fsPath) || fs.existsSync(vscode.Uri.joinPath(folder.uri, "addons").fsPath)) {
+					if (!this.browsingGmodServer) {
+						console.log("Looks like you're browsing a Gmod server - parsing lazily to save memory");
+						this.browsingGmodServer = true;
+					}
+					return false;
+				} else {
+					return true;
+				}
+			});
+
 			Promise.all([
 				new Promise((resolve) => {
 					let parsePromises = [];
-					for (let i = 0; i < vscode.workspace.textDocuments.length; i++) {
-						let textDocument = vscode.workspace.textDocuments[i];
-						if (textDocument.uri.scheme !== "file") continue;
+					if (this.browsingGmodServer) {
+						Promise.all(
+							vscode.workspace.textDocuments
+							.filter(textDocument => {
+								return textDocument.uri.scheme === "file";
+							})
+							.map(textDocument => {
+								return this.tryParseServerAddon(textDocument.uri.fsPath, parsePromises, parsedFiles);
+							})
+						).then(() => {
+							Promise.all(parsePromises).then(resolve);
+						});
+					} else {
+						for (let i = 0; i < vscode.workspace.textDocuments.length; i++) {
+							let textDocument = vscode.workspace.textDocuments[i];
+							if (textDocument.uri.scheme !== "file") continue;
 
-						let path = textDocument.uri;
-						if (path.fsPath in parsedFiles) continue;
-						if (GLuaParser.isParseableTextDocument(textDocument)) {
-							parsePromises.push(this.parseText(path, textDocument.getText()));
-						} else if (path.fsPath in this.parsedFiles) {
-							delete this.parsedFiles[path.fsPath];
+							let path = textDocument.uri;
+							if (path.fsPath in parsedFiles) continue;
+							if (GLuaParser.isParseableTextDocument(textDocument)) {
+								parsePromises.push(this.parseText(path, textDocument.getText()));
+							} else if (path.fsPath in this.parsedFiles) {
+								delete this.parsedFiles[path.fsPath];
+							}
 						}
+						Promise.all(parsePromises).then(resolve);
 					}
-					Promise.all(parsePromises).then(resolve);
 				}),
 
 				new Promise((resolve) => {
-					vscode.workspace.findFiles("**/*.lua").then(results => {
-						let parsePromises = [];
-						for (let i = 0; i < results.length; i++) {
-							let path = results[i];
-							if (path.fsPath in parsedFiles) continue;
-							parsePromises.push(this.parseFile(path, parsedFiles));
-						}
-						Promise.all(parsePromises).then(resolve);
-					});
+					let parsePromises = [];
+					if (this.browsingGmodServer) {
+						Promise.all(workspaceFolders.map(workspaceFolder => {
+							return this.tryParseServerAddon(workspaceFolder.fsPath, parsePromises, parsedFiles);
+						})).then(() => {
+							Promise.all(parsePromises).then(resolve);
+						});
+					} else {
+						this.parseFolders(workspaceFolders, parsePromises, parsedFiles).then(() => {
+							Promise.all(parsePromises).then(resolve);
+						});
+					}
 				}),
 			]).then(() => {
 				delete this.parsingWorkspace;
