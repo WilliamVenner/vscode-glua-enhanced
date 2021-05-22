@@ -552,11 +552,15 @@ class GLuaParser {
 		this.TokenIntellisenseProvider = new TokenIntellisenseProvider(GLua);
 
 		this.parsedFilesStatusBadge = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
-		this.parsedFilesStatusBadge.show();
+		this.parsedFilesStatusBadge.tooltip = "You appear to be editing a Garry's Mod server. GLua Enhanced will lazily parse GLua files to save memory usage.";
+		this.parsedFilesStatusBadge.hide();
 		this.updateStatusBadge();
 	}
 
 	updateStatusBadge() {
+		if (this.browsingGmodServer) {
+			this.parsedFilesStatusBadge.show();
+		}
 		this.parsedFilesStatusBadge.text = "$(search-view-icon) Parsed " + this.parsedFileCount + " GLua file" + (this.parsedFileCount === 1 ? '' : 's');
 	}
 
