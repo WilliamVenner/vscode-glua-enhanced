@@ -539,6 +539,9 @@ class GLuaParser {
 		this.GLua = GLua;
 		this.GLua.GLuaParser = this;
 
+		this.parsedFileCount = 0;
+		this.parsedFileCounter = {};
+
 		this.parsedFiles = {};
 		this.parsedAddons = {};
 		this.visibleTextEditors = new Map();
@@ -547,6 +550,14 @@ class GLuaParser {
 		this.registerEvents(this);
 
 		this.TokenIntellisenseProvider = new TokenIntellisenseProvider(GLua);
+
+		this.parsedFilesStatusBadge = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+		this.parsedFilesStatusBadge.show();
+		this.updateStatusBadge();
+	}
+
+	updateStatusBadge() {
+		this.parsedFilesStatusBadge.text = "$(search-view-icon) Parsed " + this.parsedFileCount + " GLua file" + (this.parsedFileCount === 1 ? '' : 's');
 	}
 
 	static isParseableTextDocument(textDocument) {
@@ -626,6 +637,12 @@ class GLuaParser {
 	}
 
 	onFileParsedEvent(fsPath) {
+		if (!(fsPath in this.parsedFileCounter)) {
+			this.parsedFileCounter[fsPath] = true;
+			this.parsedFileCount++;
+			this.updateStatusBadge();
+		}
+
 		if (this.parsingWorkspace) return;
 
 		if (!(fsPath in this.parsedFiles)) return;
