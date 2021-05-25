@@ -154,7 +154,7 @@
 			"name": "comment.line.double-slash.lua"
 		},
 		{
-			"match": "\\b(break|do|else|for|if|elseif|return|then|repeat|while|until|end|function|local|in|continue|goto)\\b",
+			"match": "\\b(break|do|else|for|if|elseif|return|then|repeat|while|until|end|function|local|in|continue|goto|or|and|not)\\b",
 			"name": "keyword.control.lua"
 		},
 		{
