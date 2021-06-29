@@ -691,7 +691,7 @@ class CompletionProvider {
 			if ("DEPRECATED" in item_def) completionItem.tags = [vscode.CompletionItemTag.Deprecated];
 
 			if (tag) {
-				item_def["TAG"] = tag
+				item_def["TAG"] = tag;
 
 				if ("SEARCH" in item_def) {
 					completionItem.DOC_TAG = tag + ":" + item_def["SEARCH"]

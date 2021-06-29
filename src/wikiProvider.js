@@ -87,6 +87,133 @@ class WikiProvider {
 		return markdown.replace(/\[(.+?)\]\(\/gmod\/(.+?)\)/g, "[$1](" + WIKI_URL + "$2)");
 	}
 
+	static getReturnsMarkdown(returns) {
+		let markdowns = "**Returns**\n\n";
+		for (let i = 0; i < returns.length; i++) {
+			let ret = returns[i];
+
+			let emoji = "";
+			switch (ret["TYPE"].toLowerCase()) {
+				case "number":
+					emoji = "🔢";
+					break;
+				
+				case "string":
+					emoji = "📋";
+					break;
+
+				case "table":
+				case "userdata":
+					emoji = "$(symbol-module)";
+					break;
+
+				case "bool":
+				case "boolean":
+					emoji = "🔰";
+					break;
+
+				case "ent":
+				case "entity":
+				case "csent":
+					emoji = "🧱";
+					break;
+
+				case "ply":
+				case "player":
+					emoji = "🙂";
+					break;
+
+				case "function":
+					emoji = "👨‍💻";
+					break;
+
+				case "thread":
+					emoji = "🧵";
+					break;
+
+				case "nil":
+					emoji = "⚫";
+					break;
+
+				case "angle":
+					emoji = "📐";
+					break;
+
+				case "vector":
+					emoji = "🔀";
+					break;
+
+				case "material":
+				case "texture":
+				case "imaterial":
+				case "itexture":
+					emoji = "🧩";
+					break;
+
+				case "color":
+				case "colour":
+					emoji = "🎨";
+					break;
+
+				case "physobj":
+					emoji = "🍃";
+					break;
+
+				case "panel":
+					emoji = "📱";
+					break;
+
+				case "vehicle":
+					emoji = "🚗";
+					break;
+
+				case "weapon":
+					emoji = "💣";
+					break;
+
+				case "file":
+				case "file_class":
+					emoji = "💾";
+					break;
+
+				case "convar":
+					emoji = "🔌";
+					break;
+
+				case "imesh":
+				case "mesh":
+					emoji = "🌐";
+					break;
+
+				case "npc":
+				case "nextbot":
+					emoji = "🤖";
+					break;
+
+				case "matrix":
+				case "vmatrix":
+					emoji = "🧮";
+					break;
+				
+				case "tool":
+					emoji = "🔨";
+					break;
+			}
+			if (emoji === "" && ret["TYPE"].match(/^C[A-Z][a-z]/)) {
+				// C<type>
+				emoji = "🔮";
+			}
+
+			markdowns += (
+				emoji +
+				("`" + ret["TYPE"].replace(/`/g, "") + "`") +
+				("NAME" in ret ? (" (" + ret["NAME"].replace(/`/g, "") + ")") : "") +
+				("DESCRIPTION" in ret ? " " + ret["DESCRIPTION"] : "")
+			) + "\n\n";
+		}
+		return markdowns.substr(0, markdowns.length-2);
+	}
+
 	resolveDocumentation(doc, label, compact) {
 		let markdown = [];
 
@@ -116,6 +243,8 @@ class WikiProvider {
 			+ ("DESCRIPTION" in bug ? " " + bug.DESCRIPTION : "")));
 
 			if ("NOTES" in doc) doc["NOTES"].map((note) => markdown.push("**📝 NOTE:** " + note));
+
+			if ("RETURNS" in doc && doc["RETURNS"].length > 0) markdown.push("--------\n" + WikiProvider.getReturnsMarkdown(doc["RETURNS"]) + "\n\n--------");
 			
 		} else if (label) {
 			if (markdown.length > 1) {

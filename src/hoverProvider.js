@@ -67,21 +67,6 @@ class HoverProvider {
 				)
 			, "glua"));
 
-			if ("RETURNS" in doc && doc["RETURNS"].length > 0) {
-				let returns = "**Returns**\n\n";
-				for (let i = 0; i < doc["RETURNS"].length; i++) {
-					let ret = doc["RETURNS"][i];
-					returns += (
-						("NAME" in ret ?
-							("**`" + ret["NAME"].replace(/`/g, "") + ":`**` " + ret["TYPE"].replace(/`/g, "") + "`") :
-							("`" + ret["TYPE"].replace(/`/g, "") + "`")
-						)
-						+
-						("DESCRIPTION" in ret ? " " + ret["DESCRIPTION"] : "")
-					) + "\n\n";
-				}
-				hovers.push(new vscode.MarkdownString(returns.substr(0, returns.length-2)));
-			}
 			hovers.push(this.GLua.WikiProvider.resolveDocumentation(doc));
 		}
 	}
