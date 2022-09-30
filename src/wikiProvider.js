@@ -20,7 +20,14 @@ class WikiProvider {
 
 	downloadWiki() {
 		const curTime = new Date().getTime();
-		if (curTime - this.GLua.extension.globalState.get("vscode-glua-enhanced-wiki-date", curTime) < 86400000) return;
+		const cacheAge = curTime - this.GLua.extension.globalState.get("vscode-glua-enhanced-wiki-date", curTime);
+		// for some reason, this doesn't work. I guess my webserver will just have to handle the traffic ¯\_(ツ)_/¯
+		// if (cacheAge < 86400000) {
+		// 	console.log(`vscode-glua: using cached wiki (age: ${cacheAge / 1000}s)`);
+		// 	return;
+		// }
+
+		console.log("vscode-glua: downloading gmod wiki");
 
 		this.GLua.downloadingMsg = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
 		this.GLua.downloadingMsg.text = "$(cloud-download) Downloading Gmod Wiki";
@@ -41,6 +48,8 @@ class WikiProvider {
 					for (let k in this.docs) delete this.docs[k];
 
 					this.GLua.CompletionProvider.createCompletionItems();
+
+					console.log("vscode-glua: gmod wiki downloaded and ingested");
 				}
 
 				if (this.GLua.downloadingMsg) {
@@ -53,7 +62,7 @@ class WikiProvider {
 
 	getRealmIcon(client, menu, server) {
 		if (!this.realmIcons) this.realmIcons = {};
-		
+
 		let realm_icon_id = (client ? "c" : "") + (menu ? "m" : "") + (server ? "s" : "");
 
 		if (!(realm_icon_id in this.realmIcons)) {
@@ -66,7 +75,7 @@ class WikiProvider {
 
 	getLabelIcon(label) {
 		if (!this.labelIcons) this.labelIcons = {};
-		
+
 		if (!(label in this.labelIcons)) {
 			let full_path = "file:///" + this.GLua.extension.asAbsolutePath("resources/icons/label_" + label + ".svg");
 			this.labelIcons[label] = "![" + label.toUpperCase() + "](" + this.markdownURL(full_path) + ")";
@@ -97,7 +106,7 @@ class WikiProvider {
 				case "number":
 					emoji = "🔢";
 					break;
-				
+
 				case "string":
 					emoji = "📋";
 					break;
@@ -194,7 +203,7 @@ class WikiProvider {
 				case "vmatrix":
 					emoji = "🧮";
 					break;
-				
+
 				case "tool":
 					emoji = "🔨";
 					break;
@@ -218,9 +227,9 @@ class WikiProvider {
 		let markdown = [];
 
 		if ("BASE_DESCRIPTION" in doc) markdown.push(doc["BASE_DESCRIPTION"]);
-		
+
 		let flags = [];
-		
+
 		if ("CLIENT" in doc || "MENU" in doc || "SERVER" in doc) flags.push(this.getRealmIcon(doc["CLIENT"], doc["MENU"], doc["SERVER"]));
 		if ("NEW" in doc) flags.push(this.getLabelIcon("new"));
 		if ("DEPRECATED" in doc) flags.push(this.getLabelIcon("deprecated"));
@@ -245,7 +254,7 @@ class WikiProvider {
 			if ("NOTES" in doc) doc["NOTES"].map((note) => markdown.push("**📝 NOTE:** " + note));
 
 			if ("RETURNS" in doc && doc["RETURNS"].length > 0) markdown.push("--------\n" + WikiProvider.getReturnsMarkdown(doc["RETURNS"]) + "\n\n--------");
-			
+
 		} else if (label) {
 			if (markdown.length > 1) {
 				markdown[0] = markdown[0] + " " + markdown[1];
