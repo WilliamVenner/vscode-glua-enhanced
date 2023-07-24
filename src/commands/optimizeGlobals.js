@@ -11,7 +11,9 @@ module.exports = ['glua-enhanced.optimizeGlobals', function() {
 				GlobalsOptimizer.optimize(
 					opt === "Greedy",
 					editBuilder,
-					this.GLua.GLuaParser.getParsed(vscode.window.activeTextEditor.document.uri, vscode.window.activeTextEditor.document)
+					this.GLua.GLuaParser.getParsed(vscode.window.activeTextEditor.document.uri, vscode.window.activeTextEditor.document),
+					false,
+					vscode.window.activeTextEditor.document.uri.fsPath
 				).then(vscode.workspace.applyEdit);
 			});
 		});

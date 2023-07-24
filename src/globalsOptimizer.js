@@ -52,7 +52,7 @@ function get_realm(DOCS) {
 }
 
 class GlobalsOptimizer {
-	static optimize(greedy, file, tokens, workspaceEdit) {
+	static optimize(greedy, file, tokens, workspaceEdit, fsPath) {
 		return new Promise(resolve => {
 			let insert_whitespace = tokens.LIST.length > 0 && "MIN" in tokens.LINES && tokens.LIST[1].loc.start.line-1 === tokens.LINES.MIN;
 			let preoptimized = {};
@@ -124,7 +124,7 @@ class GlobalsOptimizer {
 				let replacementExpression = name in preoptimized ? preoptimized[name] : name.replace(RE_REPLACE_DOT, "_");
 
 				let needs_realm_constraint = true;
-				let realm = ((workspaceEdit ? file.fsPath : file._document.uri.fsPath).match(RE_FILE_NAME)[1] || "").match(RE_REALM_PREFIX);
+				let realm = (fsPath.match(RE_FILE_NAME)[1] || "").match(RE_REALM_PREFIX);
 				switch(realm[0]) {
 					case "sv_":
 					case "cl_":
@@ -192,7 +192,7 @@ class GlobalsOptimizer {
 				if (file.fsPath in GLua.GLuaParser.parsedFiles) {
 					progress.report(incrementObj);
 					parseQueue.push(new Promise(resolve => {
-						GlobalsOptimizer.optimize(greedy, file, GLua.GLuaParser.parsedFiles[file.fsPath], workspaceEdit).then(() => {
+						GlobalsOptimizer.optimize(greedy, file, GLua.GLuaParser.parsedFiles[file.fsPath], workspaceEdit, file.fsPath).then(() => {
 							progress.report(incrementObj);
 							resolve();
 						});
@@ -201,7 +201,7 @@ class GlobalsOptimizer {
 					parseQueue.push(new Promise(resolve => {
 						GLua.GLuaParser.parseFile(file).then(tokens => {
 							progress.report(incrementObj);
-							GlobalsOptimizer.optimize(greedy, file, tokens, workspaceEdit).then(() => {
+							GlobalsOptimizer.optimize(greedy, file, tokens, workspaceEdit, file.fsPath).then(() => {
 								progress.report(incrementObj);
 								resolve();
 							});
