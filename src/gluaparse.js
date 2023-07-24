@@ -718,7 +718,7 @@ class GLuaParser {
 		return new Promise((resolve) => {
 			let parsedFiles = {};
 
-			const workspaceFolders = vscode.workspace.workspaceFolders.filter(folder => {
+			const workspaceFolders = (vscode.workspace.workspaceFolders ?? []).filter(folder => {
 				if (folder.uri.fsPath.match(/garrysmod(?:(?:\\|\/)addons)?(?:\\|\/)?$/i) || fs.existsSync(vscode.Uri.joinPath(folder.uri, "garrysmod/addons").fsPath) || fs.existsSync(vscode.Uri.joinPath(folder.uri, "addons").fsPath)) {
 					if (!this.browsingGmodServer) {
 						console.log("Looks like you're browsing a Gmod server - parsing lazily to save memory");
