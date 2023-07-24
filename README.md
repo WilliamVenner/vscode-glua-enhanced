@@ -1,8 +1,5 @@
 <p align="center">
 	<img alt="Logo" src="https://github.com/WilliamVenner/vscode-glua-enhanced/blob/master/resources/logo.png?raw=true"/>
-	<br/><br/>
-	<img alt="Installs" src="https://vsmarketplacebadge.apphb.com/installs-short/venner.vscode-glua-enhanced.svg"/>
-	<img alt="Rating" src="https://vsmarketplacebadge.apphb.com/rating-short/venner.vscode-glua-enhanced.svg"/>
 </p>
 
 # 👨‍💻 vscode-glua-enhanced
