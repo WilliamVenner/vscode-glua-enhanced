@@ -1,5 +1,6 @@
 const vscode = require("vscode");
 const { TokenAnalyzer } = require("./gluaparse");
+const { LUA_ESCAPE_SEQUENCES } = require("./tokenizer");
 
 // (?:\\(?:(\\)|(")|(')|([bfv0rnt])|(x?\d+)))|([^\\]+)
 const REGEXP_ASCII_HOVER = /(?:\\(?:\d+|x[a-f0-9]+))+/gi;
@@ -135,7 +136,7 @@ class HoverProvider {
 			let str_range = new vscode.Range(line.lineNumber, match.index, line.lineNumber, match.index + match[0].length);
 			if (str_range.contains(pos)) {
 				let valid_str = true;
-				let escaped = match[2].replace(/\\(.)/g, char => {
+				let escaped = match[2].replace(/\\(.)/g, (_, char) => {
 					if (char in LUA_ESCAPE_SEQUENCES) {
 						return LUA_ESCAPE_SEQUENCES[char];
 					} else {
