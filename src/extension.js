@@ -59,8 +59,8 @@ class GLua {
 			this.TokenIntellisenseProvider.compileTokenData();
 
 			console.log("vscode-glua parsed " + Object.keys(parsedFiles).length + " workspace Lua file(s)");
-			console.timeEnd("vscode-glua-workspace-parse");
 		});
+		console.timeEnd("vscode-glua-workspace-parse");
 
 		this.registerEvents(this);
 	}
