@@ -766,7 +766,7 @@ class GLuaParser {
 					let parsePromises = [];
 					if (this.browsingGmodServer) {
 						Promise.all(workspaceFolders.map(workspaceFolder => {
-							return this.tryParseServerAddon(workspaceFolder.fsPath, parsePromises, parsedFiles);
+							return this.tryParseServerAddon(workspaceFolder.uri.fsPath, parsePromises, parsedFiles);
 						})).then(() => {
 							Promise.all(parsePromises).then(resolve);
 						});
