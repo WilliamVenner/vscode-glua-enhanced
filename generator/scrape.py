@@ -163,6 +163,8 @@ class WikiParser:
 				if not "DEPRECATED" in item_def or type(item_def["DEPRECATED"]) is bool:
 					item_def["DEPRECATED"] = []
 				item_def["DEPRECATED"].append(self.compress_newlines(deprecated_content))
+			else:
+				item_def["DEPRECATED"] = True
 			item.remove(deprecated)
 		if "DEPRECATED" in item_def and type(item_def["DEPRECATED"]) is list:
 			item_def["DEPRECATED"] = sorted(item_def["DEPRECATED"], key=len)
