@@ -6,7 +6,6 @@ import hashlib
 import os, os.path
 import re
 import copy
-import minify_html
 from queue import Queue
 from io import StringIO
 
@@ -35,8 +34,6 @@ def request(url, cached=False, cache_extension="html", quiet=False):
 	response = http.request("GET", url)
 	if response.status >= 200 and response.status < 300:
 		body = response.data.decode("utf-8")
-
-		body = minify_html.minify(body)
 
 		f = open(cached_path, "w", encoding="utf-8", newline="\n")
 		f.write(body)
