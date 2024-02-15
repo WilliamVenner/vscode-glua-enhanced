@@ -66,7 +66,7 @@ class WikiProvider {
 		let realm_icon_id = (client ? "c" : "") + (menu ? "m" : "") + (server ? "s" : "");
 
 		if (!(realm_icon_id in this.realmIcons)) {
-			let full_path = "file:///" + this.GLua.extension.asAbsolutePath("resources/icons/realm_" + realm_icon_id + ".svg");
+			let full_path = vscode.Uri.file(this.GLua.extension.asAbsolutePath("resources/icons/realm_" + realm_icon_id + ".svg")).toString();
 			this.realmIcons[realm_icon_id] = "![" + [client ? "CLIENT" : null, menu ? "MENU" : null, server ? "SERVER" : null].filter((v) => !!v).join("/") + "](" + this.markdownURL(full_path) + ")";
 		}
 
@@ -77,7 +77,7 @@ class WikiProvider {
 		if (!this.labelIcons) this.labelIcons = {};
 
 		if (!(label in this.labelIcons)) {
-			let full_path = "file:///" + this.GLua.extension.asAbsolutePath("resources/icons/label_" + label + ".svg");
+			let full_path = vscode.Uri.file(this.GLua.extension.asAbsolutePath("resources/icons/label_" + label + ".svg")).toString();
 			this.labelIcons[label] = "![" + label.toUpperCase() + "](" + this.markdownURL(full_path) + ")";
 		}
 
@@ -291,7 +291,7 @@ class WikiProvider {
 
 		if (doc) {
 			if ("RAW_IMAGE" in doc) {
-				item.documentation = new vscode.MarkdownString("![" + escape(item.label) + "](file:///" + this.markdownURL(doc["RAW_IMAGE"]) + ")");
+				item.documentation = new vscode.MarkdownString("![" + escape(item.label) + "](" + vscode.Uri.file(this.markdownURL(doc["RAW_IMAGE"])).toString() + ")");
 				return item;
 			}
 

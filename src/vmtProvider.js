@@ -74,7 +74,7 @@ class VMTProvider {
 
 					vscode.workspace.findFiles(vtf_path, undefined, 2, cancel).then(results => {
 						if (results.length !== 1) return reject();
-						
+
 						const vtf_path = results[0];
 						const png_path = TempFile.getTempPath(md5(vtf_path.fsPath) + ".vtf.png");
 
@@ -101,7 +101,7 @@ class VMTProvider {
 							resolve(png_path);
 
 						}, () => {
-							
+
 							// Generate PNG
 							vscode.workspace.fs.readFile(vtf_path).then(contents => {
 
@@ -109,7 +109,7 @@ class VMTProvider {
 								try {
 									let vtfImages = new VTFFile(contents).getImages();
 									if (vtfImages.length === 0) return reject();
-									
+
 									let vtf;
 									for (let i = vtfImages.length-1; i >= 0; i--) {
 										if (vtfImages[i].Width <= 256) {
@@ -118,7 +118,7 @@ class VMTProvider {
 										}
 									}
 									if (!vtf) vtf = vtfImages[vtfImages.length-1];
-									
+
 									png = new PNG({
 										width: vtf.Width,
 										height: vtf.Height,
@@ -141,8 +141,8 @@ class VMTProvider {
 					}, reject);
 
 				}).then(png_path => {
-					
-					item.documentation = new vscode.MarkdownString("![](file:///" + this.GLua.WikiProvider.markdownURL(png_path) + ")\n\n" + item.documentation.value);
+
+					item.documentation = new vscode.MarkdownString("![](" + vscode.Uri.file(this.GLua.WikiProvider.markdownURL(png_path)).toString() + ")\n\n" + item.documentation.value);
 					resolve(item);
 
 				}, () => resolve(item));

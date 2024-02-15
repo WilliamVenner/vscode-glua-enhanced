@@ -17,7 +17,7 @@ class HoverProvider {
 
 		this.registerSubscriptions();
 	}
-	
+
 	registerSubscriptions() {
 		this.GLua.extension.subscriptions.push(vscode.languages.registerHoverProvider("glua", { provideHover: (document, pos, cancel) => this.provideWikiHover(this, document, pos, cancel) }));
 		this.GLua.extension.subscriptions.push(vscode.languages.registerHoverProvider("glua", { provideHover: (document, pos, cancel) => this.provideStringHover(this, document, pos, cancel) }));
@@ -58,15 +58,16 @@ class HoverProvider {
 		for (let i = 0; i < docs.length; i++) {
 			let doc = docs[i];
 
-			hovers.push(new vscode.MarkdownString().appendCodeblock(
+			const markdown =
 				(doc["EVENT"] ? "(hook) " : "") +
 				(doc["METHOD"] ? "(method) " : "") +
 				(doc["TAG"] === "ENUM" ? ("(enum) " + doc["SEARCH"]) :
 					(doc["SEARCH"] + "(" +
 						("ARGUMENTS" in doc ? this.GLua.SignatureProvider.generateSignatureString(doc["ARGUMENTS"]) : "")
 					+ ")")
-				)
-			, "glua"));
+				);
+
+			hovers.push(new vscode.MarkdownString().appendCodeblock(markdown, "glua"));
 
 			hovers.push(this.GLua.WikiProvider.resolveDocumentation(doc));
 		}
@@ -78,13 +79,13 @@ class HoverProvider {
 		let [hover_type, full_call, range, token] = HoverProvider.getHoverCallExpression(document, pos);
 		if (token) {
 			let hovers = [];
-			
+
 			switch(hover_type) {
 				case HOVER_GENERIC:
 					let callExpression = token.type === "CallExpression" ? token : (token.parent.type === "CallExpression" ? token.parent : undefined);
 					if (callExpression) {
 						if ("DOC" in callExpression) this.pushWikiHovers(hovers, callExpression["DOC"]);
-						
+
 						if (full_call.length >= 2 && full_call[full_call.length-2] === ":") {
 							range = TokenAnalyzer.getTokenRange("identifier" in callExpression ? callExpression.identifier : (callExpression.base.type !== "Identifier" ? callExpression.base.identifier : callExpression.base));
 
@@ -102,7 +103,7 @@ class HoverProvider {
 					if (LuaType) hovers.push(new vscode.MarkdownString("**`" + LuaType.replace(/`/g, "") + "`**"));
 
 					break;
-				
+
 				case HOVER_ENUM:
 					this.pushWikiHovers(hovers, [this.GLua.WikiProvider.docs[full_call]]);
 					break;
@@ -114,7 +115,7 @@ class HoverProvider {
 
 	provideStringHover(HoverProvider, document, pos, cancel) {
 		if (cancel.isCancellationRequested) return;
-		
+
 		let line = document.lineAt(pos);
 
 		REGEXP_ASCII_HOVER.lastIndex = 0; // reset match position
@@ -128,7 +129,7 @@ class HoverProvider {
 				}
 			} catch(e) {}
 		}
-		
+
 		REGEXP_LUA_STR.lastIndex = 0; // reset match position
 		var match;
 		while ((match = REGEXP_LUA_STR.exec(line.text)) !== null) {
