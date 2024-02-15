@@ -6,6 +6,7 @@ import hashlib
 import os, os.path
 import re
 import copy
+import minify_html
 from queue import Queue
 from io import StringIO
 
@@ -35,10 +36,12 @@ def request(url, cached=False, cache_extension="html", quiet=False):
 	if response.status >= 200 and response.status < 300:
 		body = response.data.decode("utf-8")
 
+		body = minify_html.minify(body)
+
 		f = open(cached_path, "w", encoding="utf-8", newline="\n")
 		f.write(body)
 		f.close()
-		
+
 		return body
 	else:
 		raise Exception("Got HTTP {status} code from GET {url}".format(status = response.status, url = url))
@@ -77,7 +80,7 @@ class WikiParser:
 				continue
 			elif class_name in classes:
 				obj[key] = True
-	
+
 	## Parsing Wiki Pages ##
 
 	PAGE_PARSE_QUEUE: Queue = Queue()
@@ -109,14 +112,14 @@ class WikiParser:
 						link_text = "[" + self.LINKS[page] + "](" + link + ")"
 					else:
 						link_text = "[" + page + "](" + link + ")"
-					
+
 					child.tail = link_text + (child.tail or '')
 
 			strip_elements(elem_copy, "*", with_tail=False)
-			
-			text = elem_copy.text_content()
+
+			text = elem_copy.text_content().strip()
 		else:
-			text = elem.text_content()
+			text = elem.text_content().strip()
 
 		text = text.strip()
 		if len(text) > 0:
@@ -131,7 +134,7 @@ class WikiParser:
 	def parse_view_source(self, item, item_def):
 		for src in CSSSelector(":scope > file")(item):
 			if "line" in src.attrib:
-				item_def["SRC"] = [src.text_content(), src.attrib["line"].replace("L", "")]
+				item_def["SRC"] = [src.text_content().strip(), src.attrib["line"].replace("L", "")]
 
 	def parse_text_content(self, item, item_def=False):
 		description = self.interpolate_wiki_links(item)
@@ -144,10 +147,10 @@ class WikiParser:
 					item_def["DESCRIPTION"] = item_def["DESCRIPTION"] + "\n\n" + description
 				else:
 					item_def["DESCRIPTION"] = description
-	
+
 	def add_item_content_def(self, item, item_def):
 		self.parse_text_content(item, item_def)
-		
+
 		sel_deprecated = CSSSelector(":scope > deprecated")
 		sel_removed = CSSSelector(":scope > removed")
 		sel_notes = CSSSelector(":scope > note")
@@ -163,7 +166,7 @@ class WikiParser:
 			item.remove(deprecated)
 		if "DEPRECATED" in item_def and type(item_def["DEPRECATED"]) is list:
 			item_def["DEPRECATED"] = sorted(item_def["DEPRECATED"], key=len)
-		
+
 		for bug in sel_bugs(item):
 			bug_def = {}
 			if "pull" in bug.attrib:
@@ -185,7 +188,7 @@ class WikiParser:
 			item.remove(note)
 		if "NOTES" in item_def:
 			item_def["NOTES"] = sorted(item_def["NOTES"], key=len)
-		
+
 		for warning in sel_warnings(item):
 			warning_content = self.parse_text_content(warning)
 			if warning_content:
@@ -214,22 +217,22 @@ class WikiParser:
 		for arg in CSSSelector("function > args > arg")(item):
 			if "ARGUMENTS" not in item_def:
 				item_def["ARGUMENTS"] = []
-			
+
 			arg_def = {}
 			if "name" in arg.attrib and len(arg.attrib["name"]) > 0:
 				arg_def["NAME"] = arg.attrib["name"]
 			if "type" in arg.attrib and len(arg.attrib["type"]) > 0:
 				arg_def["TYPE"] = arg.attrib["type"]
-				
+
 				if arg_def["TYPE"] == "number":
 					for page in find_enum_links(arg):
 						link = page.text_content().strip()
 						if link.startswith("Enums/"):
 							arg_def["ENUM"] = link[len("Enums/"):]
-			
+
 			if "default" in arg.attrib and len(arg.attrib["default"]) > 0:
 				arg_def["DEFAULT"] = arg.attrib["default"]
-			
+
 			self.add_item_content_def(arg, arg_def)
 
 			if arg_def["TYPE"] == "function" and "DESCRIPTION" in arg_def:
@@ -242,21 +245,21 @@ class WikiParser:
 					if name: callback_param_def["NAME"] = name
 					if match.group(4): callback_param_def["DESCRIPTION"] = match.group(4)
 					arg_def["CALLBACK"].append(callback_param_def)
-			
+
 			item_def["ARGUMENTS"].append(arg_def)
 
 		for ret in CSSSelector("function > rets > ret")(item):
 			if "RETURNS" not in item_def:
 				item_def["RETURNS"] = []
-			
+
 			ret_def = {}
 			if "name" in ret.attrib and len(ret.attrib["name"]) > 0:
 				ret_def["NAME"] = ret.attrib["name"]
 			if "type" in ret.attrib and len(ret.attrib["type"]) > 0:
 				ret_def["TYPE"] = ret.attrib["type"]
-				
+
 			self.add_item_content_def(ret, ret_def)
-			
+
 			item_def["RETURNS"].append(ret_def)
 
 	def parse_struct(self, struct_name, url, struct_def):
@@ -264,7 +267,7 @@ class WikiParser:
 
 		description_elem = CSSSelector(":scope > structure > description")(body)
 		if len(description_elem) > 0: self.add_item_content_def(description_elem[0], struct_def)
-		
+
 		for field in CSSSelector("fields > item")(body):
 			field_name = field.attrib["name"]
 
@@ -274,7 +277,7 @@ class WikiParser:
 			field_def["TYPE"] = field.attrib["type"]
 			if "default" in field.attrib and len(field.attrib["default"]) > 0:
 				field_def["DEFAULT"] = field.attrib["default"]
-			
+
 			self.add_item_content_def(field, field_def)
 			self.PARSED["STRUCTS"][struct_name]["MEMBERS"][field_name] = field_def
 
@@ -288,10 +291,10 @@ class WikiParser:
 		panel = CSSSelector("panel")(body)
 		if len(panel) > 0:
 			parent = CSSSelector(":scope > parent")(panel[0])
-			if len(parent) > 0: lib_def["PARENT"] = parent[0].text_content()
+			if len(parent) > 0: lib_def["PARENT"] = parent[0].text_content().strip()
 
 			preview = CSSSelector(":scope > preview")(panel[0])
-			if len(preview) > 0: lib_def["PREVIEW"] = preview[0].text_content()
+			if len(preview) > 0: lib_def["PREVIEW"] = preview[0].text_content().strip()
 
 			description_elem = CSSSelector(":scope > description")(panel[0])
 			if len(description_elem) > 0: self.add_item_content_def(description_elem[0], lib_def)
@@ -307,14 +310,14 @@ class WikiParser:
 		body = self.get_wiki_page_markup(url)
 
 		predicted = CSSSelector("function > predicted")(body)
-		if len(predicted) > 0 and predicted[0].text_content() == "Yes":
+		if len(predicted) > 0 and predicted[0].text_content().strip() == "Yes":
 			hook_def["PREDICTED"] = True
 
 		self.parse_generic_func(body, hook_def)
 
 	def parse_enum(self, url, enum_def_base):
 		body = self.get_wiki_page_markup(url)
-		
+
 		description_elem = CSSSelector("enum > description")(body)
 		if len(description_elem) > 0: self.add_item_content_def(description_elem[0], enum_def_base)
 
@@ -347,7 +350,7 @@ class WikiParser:
 				enum_def["VALUE"] = enum.attrib["value"]
 				enum_def["LINK"] = enum_def["LINK"] + "#" + enum_name
 				if reference_only: enum_def["REF_ONLY"] = True
-				
+
 				self.add_item_content_def(enum, enum_def)
 				self.PARSED["ENUMS"][enum_name] = enum_def
 
@@ -362,7 +365,7 @@ class WikiParser:
 			self.add_class_defs(generic_def, child.classes, force_non_deprecated)
 			self.add_wiki_link(generic_def, child, name, True)
 			self.PARSED[key][name] = generic_def
-			
+
 			self.queue_page_parse(self.parse_function, child.attrib["href"], generic_def)
 
 	def parse_struct_category(self, category_list):
@@ -404,12 +407,12 @@ class WikiParser:
 			category_item = sel_category_item(item)
 			if len(category_item) >= 1:
 				category_item = category_item[0]
-				
+
 				meta_func = category_item.attrib["search"].split(":")
 				if len(meta_func) > 1:
 					item_name = meta_func[1]
 				else:
-					item_name = category_item.text_content()
+					item_name = category_item.text_content().strip()
 
 				member_def = {}
 				member_def["SEARCH"] = category_item.attrib["search"]
@@ -432,7 +435,7 @@ class WikiParser:
 				self.parse_subcategories(subcategory_def, sel_category_list(item)[0], deprecated=deprecated)
 
 	def get_subcategory_name(self, subcategory):
-		return (CSSSelector("summary > a")(subcategory) or CSSSelector("a")(subcategory))[0].text_content()#attrib["search"].strip().replace(" ", "_")
+		return (CSSSelector("summary > a")(subcategory) or CSSSelector("a")(subcategory))[0].text_content().strip()#attrib["search"].strip().replace(" ", "_")
 
 	def __init__(self, cached=False, quiet=False):
 		self.USE_CACHE = cached
@@ -457,7 +460,7 @@ class WikiParser:
 			# Don't include PANEL hooks
 			if parent in self.PARSED["PANELS"]:
 				continue
-			
+
 			# Make some adjustments
 			parent_href = "/gmod/" + parent + "_HOOKS"
 			if parent == "WEAPON":
@@ -479,7 +482,7 @@ class WikiParser:
 			self.PARSED["HOOKS"][parent]["MEMBERS"][member] = hook_def
 
 			self.queue_page_parse(self.parse_hook, hook.attrib["href"], hook_def)
-		
+
 		# Register enums
 		for enum in CSSSelector("a.cm.enum")(self.TREE):
 			enum_def = {}
@@ -497,7 +500,7 @@ class WikiParser:
 			div = sel_category_name(category)[0]
 			div.remove(div[1])
 			name = div.text_content().strip()
-			
+
 			if name == "Globals":
 				print("=========== Globals ===========")
 				self.parse_globals("GLOBALS", sel_category_list(category))
@@ -513,7 +516,7 @@ class WikiParser:
 			elif name == "Libraries":
 				print("=========== Libraries ===========")
 				self.parse_subcategory(category, self.PARSED["LIBRARIES"], sel_category_items(category))
-		
+
 		# Process queue
 		self.process_page_parse_queue()
 
@@ -527,7 +530,7 @@ class WikiParser:
 					del member[key]
 				elif "members" in member[key]:
 					strip_empty_keys(member[key]["members"], id_base + key + ".")
-			
+
 		for category, items in self.PARSED.items():
 			strip_empty_keys(items)
 

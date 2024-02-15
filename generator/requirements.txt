@@ -1,3 +1,4 @@
 urllib3
 lxml
 cssselect
+minify-html
