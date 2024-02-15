@@ -1,4 +1,5 @@
 generator/scrape/
+generator/scrape-minified/
 .mypy_cache/
 .vscode/*
 !.vscode/launch.json

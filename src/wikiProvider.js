@@ -20,7 +20,7 @@ class WikiProvider {
 
 	downloadWiki() {
 		const curTime = new Date().getTime();
-		const cacheAge = curTime - this.GLua.extension.globalState.get("vscode-glua-enhanced-wiki-date", curTime);
+		const cacheAge = curTime - this.GLua.extension.globalState.get("vscode-glua-enhanced-wiki-date2", curTime);
 		// for some reason, this doesn't work. I guess my webserver will just have to handle the traffic ¯\_(ツ)_/¯
 		// if (cacheAge < 86400000) {
 		// 	console.log(`vscode-glua: using cached wiki (age: ${cacheAge / 1000}s)`);
@@ -39,8 +39,8 @@ class WikiProvider {
 			stream.on('end', () => {
 				data = JSON.parse(data);
 				if (data) {
-					this.GLua.extension.globalState.update("vscode-glua-enhanced-wiki-date", Math.round(new Date().getTime()));
-					this.GLua.extension.globalState.update("vscode-glua-enhanced-wiki-data", data);
+					this.GLua.extension.globalState.update("vscode-glua-enhanced-wiki-date2", Math.round(new Date().getTime()));
+					this.GLua.extension.globalState.update("vscode-glua-enhanced-wiki-data2", data);
 
 					// Sucks, but it's JavaScript, who cares?! :-)
 					for (let k in this.wiki) delete this.wiki[k];
@@ -331,7 +331,7 @@ class WikiProvider {
 		this.getLabelIcon("predicted");
 		this.getLabelIcon("networkvar");
 
-		const storedWikiData = this.GLua.extension.globalState.get("vscode-glua-enhanced-wiki-data");
+		const storedWikiData = this.GLua.extension.globalState.get("vscode-glua-enhanced-wiki-data2");
 		this.wiki = storedWikiData ?? require("../resources/wiki.json");
 		this.downloadWiki();
 
