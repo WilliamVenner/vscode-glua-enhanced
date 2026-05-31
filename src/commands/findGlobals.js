@@ -3,6 +3,14 @@ const escape = require("markdown-escape");
 
 const noop = () => {};
 
+function getDefinitionLink(token) {
+	let uri = typeof token.uri === "string" ? vscode.Uri.file(token.uri) : token.uri;
+	let line = token.loc.start.line;
+	let column = token.loc.start.column + 1;
+	let path = uri.path;
+	return `vscode://file${path}:${line}:${column}`;
+}
+
 module.exports = ['glua-enhanced.findGlobals', function() {
 	let globals = Object.keys(this.GLua.TokenIntellisenseProvider.compiledTokenData._G);
 	if (globals.length === 0) {
@@ -21,14 +29,16 @@ module.exports = ['glua-enhanced.findGlobals', function() {
 			for (let i = 0; i < tokens.length; i++) {
 				let token = tokens[i];
 				let relPath = vscode.workspace.asRelativePath(token.uri);
-				definitions += `[${relPath}](/${encodeURI(relPath)}) (Line ` + token.loc.start.line + (token.loc.start.column > 0 ? (":" + token.loc.start.column) : "") + ")<br>";
+				let link = getDefinitionLink(token);
+				definitions += `[${escape(relPath)}](${link}) (Line ` + token.loc.start.line + (token.loc.start.column > 0 ? (":" + token.loc.start.column) : "") + ")<br>";
 			}
 
 			compiled += "\n| " + escape(name) + " | " + definitions.replace(/<br>$/, "") + " |";
 		}
 
 		this.GLua.createTempFile("glua_enhanced_globals.md", (new TextEncoder()).encode(compiled)).then(([path]) => {
-			vscode.commands.executeCommand("markdown.showPreview", vscode.Uri.file(path)).then(noop, (err) => {
+			let previewUri = vscode.Uri.file(path).with({ query: Date.now().toString() });
+			vscode.commands.executeCommand("markdown.showPreview", previewUri).then(noop, (err) => {
 				vscode.window.showErrorMessage("Error: " + err);
 			});
 		});
