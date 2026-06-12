@@ -85,7 +85,7 @@ class WikiProvider {
 	}
 
 	stripCodeFormatting(str) {
-		return str.replace(/```[\s\S]+?```/g, "_< ommitted code block >_").replace(/^[\t\r ]*/gm, "");
+		return str.replace(/```[\s\S]+?```/g, "_< omitted code block >_").replace(/^[\t\r ]*/gm, "");
 	}
 
 	markdownURL(url) {

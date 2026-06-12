@@ -29,7 +29,7 @@ class Tokenizer {
 		this.openMultilineString = false;
 		this.openEscape = false;
 
-		this.openParanthesis = [];
+		this.openParenthesis = [];
 		this.openShortFuncCall = false; // e.g. AddCSLuaFile "whatever.lua"
 
 		this.history = { 
@@ -48,12 +48,12 @@ class Tokenizer {
 	functionCallOpen(i) {
 		let func = [this.token];
 		this.history.functionCallsOpen[func] = i - this.token.length - 1;
-		this.openParanthesis.push(func);
+		this.openParenthesis.push(func);
 		this.token = "";
 	}
 
 	functionCallClose(i) {
-		let func = this.openParanthesis.pop();
+		let func = this.openParenthesis.pop();
 		this.history.functionCallsClosed.push([func, this.history.functionCallsOpen[func], i + 1]);
 		delete this.history.functionCallsOpen[func];
 		this.token = "";
@@ -83,7 +83,7 @@ class Tokenizer {
 					this.openString = false;
 					this.token += "\"";
 					if (this.openShortFuncCall) {
-						this.openParanthesis.pop();
+						this.openParenthesis.pop();
 						this.token = "";
 					}
 					this.openShortFuncCall = false;
@@ -189,12 +189,12 @@ class Tokenizer {
 								break;
 							}
 						} else {
-							this.openParanthesis.push(false);
+							this.openParenthesis.push(false);
 						}
 						break;
 		
 					case ")":
-						if (this.openParanthesis !== false) {
+						if (this.openParenthesis !== false) {
 							this.functionCallClose(i);
 							break;
 						} else {
@@ -207,8 +207,8 @@ class Tokenizer {
 							this.invalidLua = true;
 							break tokenize;
 						}
-						if (this.openParanthesis.length > 0) {
-							let func = this.openParanthesis[this.openParanthesis.length-1];
+						if (this.openParenthesis.length > 0) {
+							let func = this.openParenthesis[this.openParenthesis.length-1];
 							if (func === false) {
 								this.invalidLua = true;
 								break tokenize;
