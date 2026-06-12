@@ -25,7 +25,7 @@ var opcodesWeight = Object.freeze({
 	"MOV": 0.3, // MOV is most common opcode, it should give much weight but sometimes you need to organize it properly
 	"NOT": 1, // Unary opcodes
 	"UNM": 1,
-	"LEN": 2, // Lenght might get expensive on tables
+	"LEN": 2, // Length might get expensive on tables
 	"ADDVN": 1, // Arithmetics with literal + var is fine
 	"SUBVN": 1,
 	"MULVN": 1,
@@ -49,7 +49,7 @@ var opcodesWeight = Object.freeze({
 	"KNUM": 1,
 	"KPRI": 1,
 	"KNIL": 1,
-	"UGET": 3, // Getting upvalue. The complexity is unkown because we don't know how far is the original local is, so we count as getting 3 locals.
+	"UGET": 3, // Getting upvalue. The complexity is unknown because we don't know how far is the original local is, so we count as getting 3 locals.
 	"USETV": 3.5, // Little expensive for the cost of getting value from the stack
 	"USETS": 3, // These are fine
 	"USETN": 3,

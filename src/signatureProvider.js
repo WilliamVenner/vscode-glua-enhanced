@@ -94,19 +94,19 @@ class SignatureProvider {
 		let cursor = line.text.substr(0, pos.character);
 		
 		let tokenized = new Tokenizer(cursor);
-		if (tokenized.invalidLua || tokenized.openParanthesis.length === 0) return;
+		if (tokenized.invalidLua || tokenized.openParenthesis.length === 0) return;
 
-		let func = tokenized.openParanthesis[tokenized.openParanthesis.length-1];
+		let func = tokenized.openParenthesis[tokenized.openParenthesis.length-1];
 		if (func == false) return;
 
 		let activeCallbackParameter;
 		let callback = false;
-		if (tokenized.openParanthesis.length > 1) {
+		if (tokenized.openParenthesis.length > 1) {
 			// Detect a callback function
 			if (func[0] === "function") {
 				callback = true;
 				activeCallbackParameter = func.length - 1;
-				func = tokenized.openParanthesis[tokenized.openParanthesis.length-2];
+				func = tokenized.openParenthesis[tokenized.openParenthesis.length-2];
 			}
 		}
 
